@@ -6,6 +6,7 @@ import re
 import struct
 
 
+# Added Drik 1 start
 def hash_opensubtitles(video_path):
     """Compute a hash using OpenSubtitles' algorithm.
 
@@ -14,6 +15,7 @@ def hash_opensubtitles(video_path):
     :rtype: str
 
     """
+	# Generate hash from file
     bytesize = struct.calcsize(b'<q')
     with open(video_path, 'rb') as f:
         filesize = os.path.getsize(video_path)
@@ -32,10 +34,21 @@ def hash_opensubtitles(video_path):
             filehash += l_value
             filehash &= 0xFFFFFFFFFFFFFFFF
     returnedhash = '%016x' % filehash
-
+	# If exist, use hash from hash file
+    filename=os.path.splitext(os.path.basename(video_path))[0]
+    dirpath=os.path.dirname(video_path)
+    hashpath = os.path.abspath(os.path.join(dirpath, filename + '.openhash'))
+    if (os.path.isfile(hashpath)):
+        try:
+            f_open = open(hashpath, "r")
+            returnedhash = f_open.read()
+            f_open.close()
+        except:
+            pass
     return returnedhash
+# Added Drik 1 stop
 
-
+# Added Drik 2 start
 def hash_thesubdb(video_path):
     """Compute a hash using TheSubDB's algorithm.
 
@@ -44,16 +57,24 @@ def hash_thesubdb(video_path):
     :rtype: str
 
     """
-    readsize = 64 * 1024
-    if os.path.getsize(video_path) < readsize:
-        return
+	# Generate hash from file
+    readsize = 1024 * 1024 * 10
     with open(video_path, 'rb') as f:
         data = f.read(readsize)
-        f.seek(-readsize, os.SEEK_END)
-        data += f.read(readsize)
-
-    return hashlib.md5(data).hexdigest()
-
+    hash_napi = hashlib.md5(data).hexdigest()
+	# If exist, use hash from hash file
+    filename=os.path.splitext(os.path.basename(video_path))[0]
+    dirpath=os.path.dirname(video_path)
+    hashpath = os.path.abspath(os.path.join(dirpath, filename + '.napihash'))
+    if (os.path.isfile(hashpath)):
+        try:
+            f_napi = open(hashpath, "r")
+            hash_napi = f_napi.read()
+            f_napi.close()
+        except:
+    	    pass
+    return hash_napi
+# Added Drik 2 stop
 
 def hash_napiprojekt(video_path):
     """Compute a hash using NapiProjekt's algorithm.
