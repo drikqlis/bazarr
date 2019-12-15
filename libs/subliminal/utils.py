@@ -42,8 +42,8 @@ def hash_opensubtitles(video_path):
         try:
             f_open = open(hashpath, "r")
             hashandsize = f_open.read()
-			hashandsize = hashandsize.split(";")
-			returnedhash = hashandsize[0]
+            hashandsize = hashandsize.split(";")
+            returnedhash = hashandsize[0]
             f_open.close()
         except:
             file = open("/var/log/sickbeard_mp4_automator/test.txt", "a+")
