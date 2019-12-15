@@ -461,7 +461,7 @@ def scan_video(path):
             file = open("/var/log/sickbeard_mp4_automator/test.txt", "a+")
             file.write("error opensubtiles")
             file.close()
-	else:
+    else:
         video.size = os.path.getsize(path)
     # Drik add 1
     if video.size > 10485760:
