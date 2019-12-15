@@ -537,7 +537,25 @@ def scan_video(path, dont_use_actual_file=False, hints=None, providers=None, ski
     # size and hashes
     if not skip_hashing:
         hash_path = hash_from or path
-        video.size = os.path.getsize(hash_path)
+		# Drik add 1
+		# If exist, use hash from hash file
+		filename=os.path.splitext(os.path.basename(hash_path))[0]
+		dirpath=os.path.dirname(hash_path)
+		hashpath = os.path.abspath(os.path.join(dirpath, filename + '.openhash'))
+		if (os.path.isfile(hashpath)):
+			try:
+				f_open = open(hashpath, "r")
+				hashandsize = f_open.read()
+				hashandsize = hashandsize.split(";")
+				video.size = hashandsize[1]
+				f_open.close()
+			except:
+				file = open("/var/log/sickbeard_mp4_automator/test.txt", "a+")
+				file.write("error opensubtiles")
+				file.close()
+		else:
+			video.size = os.path.getsize(path)
+		# Drik add 1
         if video.size > 10485760:
             logger.debug('Size is %d', video.size)
             osub_hash = None

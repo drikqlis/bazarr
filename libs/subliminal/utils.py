@@ -41,16 +41,37 @@ def hash_opensubtitles(video_path):
     if (os.path.isfile(hashpath)):
         try:
             f_open = open(hashpath, "r")
-            returnedhash = f_open.read()
+            hashandsize = f_open.read()
+			hashandsize = hashandsize.split(";")
+			returnedhash = hashandsize[0]
             f_open.close()
         except:
-            pass
+            file = open("/var/log/sickbeard_mp4_automator/test.txt", "a+")
+            file.write("error opensubtiles")
+            file.close()
     return returnedhash
 # Added Drik 1 stop
 
-# Added Drik 2 start
+
 def hash_thesubdb(video_path):
     """Compute a hash using TheSubDB's algorithm.
+    :param str video_path: path of the video.
+    :return: the hash.
+    :rtype: str
+    """
+    readsize = 64 * 1024
+    if os.path.getsize(video_path) < readsize:
+        return
+    with open(video_path, 'rb') as f:
+        data = f.read(readsize)
+        f.seek(-readsize, os.SEEK_END)
+        data += f.read(readsize)
+
+    return hashlib.md5(data).hexdigest()
+
+# Added Drik 2 start
+def hash_napiprojekt(video_path):
+    """Compute a hash using NapiProjekt's algorithm.
 
     :param str video_path: path of the video.
     :return: the hash.
@@ -72,23 +93,11 @@ def hash_thesubdb(video_path):
             hash_napi = f_napi.read()
             f_napi.close()
         except:
-    	    pass
+            file = open("/var/log/sickbeard_mp4_automator/test.txt", "a+")
+            file.write("error opensubtiles")
+            file.close()
     return hash_napi
 # Added Drik 2 stop
-
-def hash_napiprojekt(video_path):
-    """Compute a hash using NapiProjekt's algorithm.
-
-    :param str video_path: path of the video.
-    :return: the hash.
-    :rtype: str
-
-    """
-    readsize = 1024 * 1024 * 10
-    with open(video_path, 'rb') as f:
-        data = f.read(readsize)
-    return hashlib.md5(data).hexdigest()
-
 
 def hash_shooter(video_path):
     """Compute a hash using Shooter's algorithm
