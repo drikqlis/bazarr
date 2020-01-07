@@ -1,5 +1,6 @@
 # coding=utf-8
 
+from __future__ import absolute_import
 import os
 import pycountry
 
@@ -10,55 +11,55 @@ from database import database
 
 def load_language_in_db():
     # Get languages list in langs tuple
-    langs = [{'code3': lang.alpha_3, 'code2': lang.alpha_2, 'name': lang.name}
+    langs = [[lang.alpha_3, lang.alpha_2, lang.name]
              for lang in pycountry.languages
              if hasattr(lang, 'alpha_2')]
     
     # Insert languages in database table
-    for lang in langs:
-        database.execute("INSERT OR IGNORE INTO table_settings_languages (code3, code2, name) VALUES (?, ?, ?)",
-                         (lang['code3'], lang['code2'], lang['name']))
+    database.execute("INSERT OR IGNORE INTO table_settings_languages (code3, code2, name) VALUES (?, ?, ?)",
+                     langs, execute_many=True)
 
     database.execute("INSERT OR IGNORE INTO table_settings_languages (code3, code2, name) "
                      "VALUES ('pob', 'pb', 'Brazilian Portuguese')")
 
-    langs = [{'code3b': lang.bibliographic, 'code3': lang.alpha_3}
+    langs = [[lang.bibliographic, lang.alpha_3]
              for lang in pycountry.languages
              if hasattr(lang, 'alpha_2') and hasattr(lang, 'bibliographic')]
     
     # Update languages in database table
-    for lang in langs:
-        database.execute("UPDATE table_settings_languages SET code3b=? WHERE code3=?", (lang['code3b'], lang['code3']))
+    database.execute("UPDATE table_settings_languages SET code3b=? WHERE code3=?", langs, execute_many=True)
+
+    # Create languages dictionary for faster conversion than calling database
+    create_languages_dict()
+
+
+def create_languages_dict():
+    global languages_dict
+    languages_dict = database.execute("SELECT name, code2, code3, code3b FROM table_settings_languages")
 
 
 def language_from_alpha2(lang):
-    result = database.execute("SELECT name FROM table_settings_languages WHERE code2=?", (lang,))
-    return result[0]['name'] or None
+    return next((item["name"] for item in languages_dict if item["code2"] == lang), None)
 
 
 def language_from_alpha3(lang):
-    result = database.execute("SELECT name FROM table_settings_languages WHERE code3=? or code3b=?", (lang, lang))
-    return result[0]['name'] or None
+    return next((item["name"] for item in languages_dict if item["code3"] == lang or item["code3b"] == lang), None)
 
 
 def alpha2_from_alpha3(lang):
-    result = database.execute("SELECT code2 FROM table_settings_languages WHERE code3=? or code3b=?", (lang, lang))
-    return result[0]['code2'] or None
+    return next((item["code2"] for item in languages_dict if item["code3"] == lang or item["code3b"] == lang), None)
 
 
 def alpha2_from_language(lang):
-    result = database.execute("SELECT code2 FROM table_settings_languages WHERE name=?", (lang,))
-    return result[0]['code2'] or None
+    return next((item["code2"] for item in languages_dict if item["name"] == lang), None)
 
 
 def alpha3_from_alpha2(lang):
-    result = database.execute("SELECT code3 FROM table_settings_languages WHERE code2=?", (lang,))
-    return result[0]['code3'] or None
+    return next((item["code3"] for item in languages_dict if item["code2"] == lang), None)
 
 
 def alpha3_from_language(lang):
-    result = database.execute("SELECT code3 FROM table_settings_languages WHERE name=?", (lang,))
-    return result[0]['code3'] or None
+    return next((item["code3"] for item in languages_dict if item["name"] == lang), None)
 
 
 def get_language_set():

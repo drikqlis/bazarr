@@ -1,6 +1,6 @@
 # coding=utf-8
 
-bazarr_version = '0.8.3.3'
+bazarr_version = '0.8.4'
 
 import os
 os.environ["SZ_USER_AGENT"] = "Bazarr/1"
@@ -9,6 +9,11 @@ os.environ["BAZARR_VERSION"] = bazarr_version
 import gc
 import sys
 import libs
+
+import six
+from six.moves import zip
+from functools import reduce
+
 import bottle
 import itertools
 import operator
@@ -16,7 +21,7 @@ import pretty
 import math
 import ast
 import hashlib
-import urllib
+import six.moves.urllib.request, six.moves.urllib.parse, six.moves.urllib.error
 import warnings
 import queueconfig
 import platform
@@ -40,9 +45,10 @@ from io import BytesIO
 from six import text_type
 from beaker.middleware import SessionMiddleware
 from cork import Cork
-from bottle import route, template, static_file, request, redirect, response, HTTPError, app, hook
+from bottle import route, template, static_file, request, redirect, response, HTTPError, app, hook, abort
 from datetime import timedelta
-from get_languages import load_language_in_db, language_from_alpha3
+from get_languages import load_language_in_db, language_from_alpha3, language_from_alpha2, alpha2_from_alpha3
+
 from get_providers import get_providers, get_providers_auth, list_throttled_providers
 from get_series import *
 from get_episodes import *
@@ -53,13 +59,15 @@ from list_subtitles import store_subtitles, store_subtitles_movie, series_scan_s
 from get_subtitle import download_subtitle, series_download_subtitles, movies_download_subtitles, \
     manual_search, manual_download_subtitle, manual_upload_subtitle
 from utils import history_log, history_log_movie, get_sonarr_version, get_radarr_version
+from helper import path_replace_reverse, path_replace_reverse_movie
 from scheduler import *
 from notifier import send_notifications, send_notifications_movie
 from subliminal_patch.extensions import provider_registry as provider_manager
 from subliminal_patch.core import SUBTITLE_EXTENSIONS
 
-reload(sys)
-sys.setdefaultencoding('utf8')
+if six.PY2:
+    reload(sys)
+    sys.setdefaultencoding('utf8')
 gc.enable()
 
 # Check and install update on startup when running on Windows from installer
@@ -128,7 +136,7 @@ def custom_auth_basic(check):
 def check_credentials(user, pw):
     username = settings.auth.username
     password = settings.auth.password
-    if hashlib.md5(pw).hexdigest() == password and user == username:
+    if hashlib.md5(pw.encode('utf-8')).hexdigest() == password and user == username:
         return True
     return False
 
@@ -137,6 +145,16 @@ def authorize():
     if login_auth == 'form':
         aaa = Cork(os.path.normpath(os.path.join(args.config_dir, 'config')))
         aaa.require(fail_redirect=(base_url + 'login'))
+
+
+def api_authorize():
+    if 'apikey' in request.GET.dict:
+        if request.GET.dict['apikey'][0] == settings.auth.apikey:
+            return
+        else:
+            abort(401, 'Unauthorized')
+    else:
+        abort(401, 'Unauthorized')
 
 
 def post_get(name, default=''):
@@ -165,7 +183,12 @@ def login():
 
 @route(base_url + 'logout')
 def logout():
-    aaa.logout(success_redirect=(base_url + 'login'))
+    if settings.auth.type == 'form':
+        aaa.logout(success_redirect=(base_url + 'login'))
+    elif settings.auth.type == 'basic':
+        abort(401)
+    else:
+        aaa.logout(success_redirect=(base_url))
 
 
 @route('/')
@@ -176,7 +199,9 @@ def redirect_root():
 
 
 @route(base_url + 'shutdown')
+@custom_auth_basic(check_credentials)
 def shutdown():
+    authorize()
     try:
         server.stop()
     except:
@@ -194,7 +219,9 @@ def shutdown():
 
 
 @route(base_url + 'restart')
+@custom_auth_basic(check_credentials)
 def restart():
+    authorize()
     try:
         server.stop()
     except:
@@ -393,7 +420,7 @@ def save_wizard():
     database.execute("UPDATE table_settings_languages SET enabled=0")
     for item in settings_subliminal_languages:
         # Enable each desired language in DB
-        database.execute("UPDATE table_settings_languages SET enabled=1 WHERE code2=?", item)
+        database.execute("UPDATE table_settings_languages SET enabled=1 WHERE code2=?", (item,))
     
     settings_serie_default_enabled = request.forms.get('settings_serie_default_enabled')
     if settings_serie_default_enabled is None:
@@ -444,7 +471,6 @@ def save_wizard():
 
 
 @route(base_url + 'static/:path#.+#', name='static')
-@custom_auth_basic(check_credentials)
 def static(path):
     return static_file(path, root=os.path.join(os.path.dirname(__file__), '../static'))
 
@@ -1288,12 +1314,12 @@ def save_settings():
     settings_death_by_captcha_username = request.forms.get('settings_death_by_captcha_username')
     settings_death_by_captcha_password = request.forms.get('settings_death_by_captcha_password')
     
-    before = (unicode(settings.general.ip), int(settings.general.port), unicode(settings.general.base_url),
-              unicode(settings.general.path_mappings), unicode(settings.general.getboolean('use_sonarr')),
-              unicode(settings.general.getboolean('use_radarr')), unicode(settings.general.path_mappings_movie))
-    after = (unicode(settings_general_ip), int(settings_general_port), unicode(settings_general_baseurl),
-             unicode(settings_general_pathmapping), unicode(settings_general_use_sonarr),
-             unicode(settings_general_use_radarr), unicode(settings_general_pathmapping_movie))
+    before = (six.text_type(settings.general.ip), int(settings.general.port), six.text_type(settings.general.base_url),
+              six.text_type(settings.general.path_mappings), six.text_type(settings.general.getboolean('use_sonarr')),
+              six.text_type(settings.general.getboolean('use_radarr')), six.text_type(settings.general.path_mappings_movie))
+    after = (six.text_type(settings_general_ip), int(settings_general_port), six.text_type(settings_general_baseurl),
+             six.text_type(settings_general_pathmapping), six.text_type(settings_general_use_sonarr),
+             six.text_type(settings_general_use_radarr), six.text_type(settings_general_pathmapping_movie))
     
     settings.general.ip = text_type(settings_general_ip)
     settings.general.port = text_type(settings_general_port)
@@ -1333,11 +1359,11 @@ def save_settings():
     # set anti-captcha provider and key
     if settings.general.anti_captcha_provider == 'anti-captcha':
         os.environ["ANTICAPTCHA_CLASS"] = 'AntiCaptchaProxyLess'
-        os.environ["ANTICAPTCHA_ACCOUNT_KEY"] = settings.anticaptcha.anti_captcha_key
+        os.environ["ANTICAPTCHA_ACCOUNT_KEY"] = str(settings.anticaptcha.anti_captcha_key)
     elif settings.general.anti_captcha_provider == 'death-by-captcha':
         os.environ["ANTICAPTCHA_CLASS"] = 'DeathByCaptchaProxyLess'
-        os.environ["ANTICAPTCHA_ACCOUNT_KEY"] = ':'.join(
-            {settings.deathbycaptcha.username, settings.deathbycaptcha.password})
+        os.environ["ANTICAPTCHA_ACCOUNT_KEY"] = str(':'.join(
+            {settings.deathbycaptcha.username, settings.deathbycaptcha.password}))
     else:
         os.environ["ANTICAPTCHA_CLASS"] = ''
     
@@ -1358,7 +1384,7 @@ def save_settings():
     settings_proxy_password = request.forms.get('settings_proxy_password')
     settings_proxy_exclude = request.forms.get('settings_proxy_exclude')
     
-    before_proxy_password = (unicode(settings.proxy.type), unicode(settings.proxy.exclude))
+    before_proxy_password = (six.text_type(settings.proxy.type), six.text_type(settings.proxy.exclude))
     if before_proxy_password[0] != settings_proxy_type:
         configured()
     if before_proxy_password[1] == settings_proxy_password:
@@ -1387,7 +1413,7 @@ def save_settings():
     else:
         settings.auth.type = text_type(settings_auth_type)
         settings.auth.username = text_type(settings_auth_username)
-        settings.auth.password = hashlib.md5(settings_auth_password).hexdigest()
+        settings.auth.password = hashlib.md5(settings_auth_password.encode('utf-8')).hexdigest()
     if settings_auth_username not in aaa._store.users:
         cork = Cork(os.path.normpath(os.path.join(args.config_dir, 'config')), initialize=True)
         cork._store.roles[''] = 100
@@ -1411,7 +1437,8 @@ def save_settings():
                 pass
             else:
                 aaa._beaker_session.delete()
-    
+    settings.auth.apikey = request.forms.get('settings_auth_apikey')
+
     settings_sonarr_ip = request.forms.get('settings_sonarr_ip')
     settings_sonarr_port = request.forms.get('settings_sonarr_port')
     settings_sonarr_baseurl = request.forms.get('settings_sonarr_baseurl')
@@ -1697,10 +1724,12 @@ def system():
 def get_logs():
     authorize()
     logs = []
-    for line in reversed(open(os.path.join(args.config_dir, 'log', 'bazarr.log')).readlines()):
-        lin = []
-        lin = line.split('|')
-        logs.append(lin)
+    with open(os.path.join(args.config_dir, 'log', 'bazarr.log')) as file:
+        for line in file.readlines():
+            lin = []
+            lin = line.split('|')
+            logs.append(lin)
+        logs.reverse()
     
     return dict(data=logs)
 
@@ -1729,10 +1758,10 @@ def remove_subtitles():
     try:
         os.remove(subtitlesPath)
         result = language_from_alpha3(language) + " subtitles deleted from disk."
-        history_log(0, sonarrSeriesId, sonarrEpisodeId, result)
+        history_log(0, sonarrSeriesId, sonarrEpisodeId, result, language=alpha2_from_alpha3(language))
     except OSError as e:
         logging.exception('BAZARR cannot delete subtitles file: ' + subtitlesPath)
-    store_subtitles(unicode(episodePath))
+    store_subtitles(path_replace_reverse(episodePath), episodePath)
 
 
 @route(base_url + 'remove_subtitles_movie', method='POST')
@@ -1747,10 +1776,10 @@ def remove_subtitles_movie():
     try:
         os.remove(subtitlesPath)
         result = language_from_alpha3(language) + " subtitles deleted from disk."
-        history_log_movie(0, radarrId, result)
+        history_log_movie(0, radarrId, result, language=alpha2_from_alpha3(language))
     except OSError as e:
         logging.exception('BAZARR cannot delete subtitles file: ' + subtitlesPath)
-    store_subtitles_movie(unicode(moviePath))
+    store_subtitles_movie(path_replace_reverse_movie(moviePath), moviePath)
 
 
 @route(base_url + 'get_subtitle', method='POST')
@@ -1783,7 +1812,7 @@ def get_subtitle():
             score = result[4]
             history_log(1, sonarrSeriesId, sonarrEpisodeId, message, path, language_code, provider, score)
             send_notifications(sonarrSeriesId, sonarrEpisodeId, message)
-            store_subtitles(unicode(episodePath))
+            store_subtitles(path, episodePath)
         redirect(ref)
     except OSError:
         pass
@@ -1840,7 +1869,7 @@ def manual_get_subtitle():
             score = result[4]
             history_log(2, sonarrSeriesId, sonarrEpisodeId, message, path, language_code, provider, score)
             send_notifications(sonarrSeriesId, sonarrEpisodeId, message)
-            store_subtitles(unicode(episodePath))
+            store_subtitles(path, episodePath)
         redirect(ref)
     except OSError:
         pass
@@ -1883,7 +1912,7 @@ def perform_manual_upload_subtitle():
             score = 360
             history_log(4, sonarrSeriesId, sonarrEpisodeId, message, path, language_code, provider, score)
             send_notifications(sonarrSeriesId, sonarrEpisodeId, message)
-            store_subtitles(unicode(episodePath))
+            store_subtitles(path, episodePath)
 
         redirect(ref)
     except OSError:
@@ -1919,7 +1948,7 @@ def get_subtitle_movie():
             score = result[4]
             history_log_movie(1, radarrId, message, path, language_code, provider, score)
             send_notifications_movie(radarrId, message)
-            store_subtitles_movie(unicode(moviePath))
+            store_subtitles_movie(path, moviePath)
         redirect(ref)
     except OSError:
         pass
@@ -1974,7 +2003,7 @@ def manual_get_subtitle_movie():
             score = result[4]
             history_log_movie(2, radarrId, message, path, language_code, provider, score)
             send_notifications_movie(radarrId, message)
-            store_subtitles_movie(unicode(moviePath))
+            store_subtitles_movie(path, moviePath)
         redirect(ref)
     except OSError:
         pass
@@ -2016,7 +2045,7 @@ def perform_manual_upload_subtitle_movie():
             score = 120
             history_log_movie(4, radarrId, message, path, language_code, provider, score)
             send_notifications_movie(radarrId, message)
-            store_subtitles_movie(unicode(moviePath))
+            store_subtitles_movie(path, moviePath)
 
         redirect(ref)
     except OSError:
@@ -2090,7 +2119,8 @@ def api_history():
 @route(base_url + 'test_url/<protocol>/<url:path>', method='GET')
 @custom_auth_basic(check_credentials)
 def test_url(protocol, url):
-    url = urllib.unquote(url)
+    authorize()
+    url = six.moves.urllib.parse.unquote(url)
     try:
         result = requests.get(protocol + "://" + url, allow_redirects=False, verify=False).json()['version']
     except:
@@ -2102,7 +2132,8 @@ def test_url(protocol, url):
 @route(base_url + 'test_notification/<protocol>/<provider:path>', method='GET')
 @custom_auth_basic(check_credentials)
 def test_notification(protocol, provider):
-    provider = urllib.unquote(provider)
+    authorize()
+    provider = six.moves.urllib.parse.unquote(provider)
     apobj = apprise.Apprise()
     apobj.add(protocol + "://" + provider)
     
@@ -2115,6 +2146,7 @@ def test_notification(protocol, provider):
 @route(base_url + 'notifications')
 @custom_auth_basic(check_credentials)
 def notifications():
+    authorize()
     if queueconfig.notifications:
         return queueconfig.notifications.read()
     else:
@@ -2124,11 +2156,104 @@ def notifications():
 @route(base_url + 'running_tasks')
 @custom_auth_basic(check_credentials)
 def running_tasks_list():
+    authorize()
     return dict(tasks=running_tasks)
+
+
+@route(base_url + 'episode_history/<no:int>')
+@custom_auth_basic(check_credentials)
+def episode_history(no):
+    authorize()
+    episode_history = database.execute("SELECT action, timestamp, language, provider, score FROM table_history "
+                                       "WHERE sonarrEpisodeId=? ORDER BY timestamp DESC", (no,))
+    for item in episode_history:
+        if item['action'] == 0:
+            item['action'] = "<div class ='ui inverted basic compact icon' data-tooltip='Subtitle file has been " \
+                             "erased.' data-inverted='' data-position='top left'><i class='ui trash icon'></i></div>"
+        elif item['action'] == 1:
+            item['action'] = "<div class ='ui inverted basic compact icon' data-tooltip='Subtitle file has been " \
+                             "downloaded.' data-inverted='' data-position='top left'><i class='ui download " \
+                             "icon'></i></div>"
+        elif item['action'] == 2:
+            item['action'] = "<div class ='ui inverted basic compact icon' data-tooltip='Subtitle file has been " \
+                             "manually downloaded.' data-inverted='' data-position='top left'><i class='ui user " \
+                             "icon'></i></div>"
+        elif item['action'] == 3:
+            item['action'] = "<div class ='ui inverted basic compact icon' data-tooltip='Subtitle file has been " \
+                             "upgraded.' data-inverted='' data-position='top left'><i class='ui recycle " \
+                             "icon'></i></div>"
+        elif item['action'] == 4:
+            item['action'] = "<div class ='ui inverted basic compact icon' data-tooltip='Subtitle file has been " \
+                             "manually uploaded.' data-inverted='' data-position='top left'><i class='ui cloud " \
+                             "upload icon'></i></div>"
+        item['timestamp'] = "<div data-tooltip='" + \
+                            time.strftime('%d/%m/%Y %H:%M:%S', time.localtime(item['timestamp'])) + "'>" + \
+                            pretty.date(datetime.fromtimestamp(item['timestamp'])) + "</div>"
+        if item['language']:
+            item['language'] = language_from_alpha2(item['language'])
+        else:
+            item['language'] = "<i>undefined</i>"
+        if item['score']:
+            item['score'] = str(round((int(item['score']) * 100 / 360), 2)) + "%"
+
+    return dict(data=episode_history)
+
+
+@route(base_url + 'movie_history/<no:int>')
+@custom_auth_basic(check_credentials)
+def movie_history(no):
+    authorize()
+    movie_history = database.execute("SELECT action, timestamp, language, provider, score FROM table_history_movie "
+                                     "WHERE radarrId=? ORDER BY timestamp DESC", (no,))
+    for item in movie_history:
+        if item['action'] == 0:
+            item['action'] = "<div class ='ui inverted basic compact icon' data-tooltip='Subtitle file has been " \
+                             "erased.' data-inverted='' data-position='top left'><i class='ui trash icon'></i></div>"
+        elif item['action'] == 1:
+            item['action'] = "<div class ='ui inverted basic compact icon' data-tooltip='Subtitle file has been " \
+                             "downloaded.' data-inverted='' data-position='top left'><i class='ui download " \
+                             "icon'></i></div>"
+        elif item['action'] == 2:
+            item['action'] = "<div class ='ui inverted basic compact icon' data-tooltip='Subtitle file has been " \
+                             "manually downloaded.' data-inverted='' data-position='top left'><i class='ui user " \
+                             "icon'></i></div>"
+        elif item['action'] == 3:
+            item['action'] = "<div class ='ui inverted basic compact icon' data-tooltip='Subtitle file has been " \
+                             "upgraded.' data-inverted='' data-position='top left'><i class='ui recycle " \
+                             "icon'></i></div>"
+        elif item['action'] == 4:
+            item['action'] = "<div class ='ui inverted basic compact icon' data-tooltip='Subtitle file has been " \
+                             "manually uploaded.' data-inverted='' data-position='top left'><i class='ui cloud " \
+                             "upload icon'></i></div>"
+
+        item['timestamp'] = "<div data-tooltip='" + \
+                            time.strftime('%d/%m/%Y %H:%M:%S', time.localtime(item['timestamp'])) + "'>" + \
+                            pretty.date(datetime.fromtimestamp(item['timestamp'])) + "</div>"
+        if item['language']:
+            item['language'] = language_from_alpha2(item['language'])
+        else:
+            item['language'] = "<i>undefined</i>"
+        if item['score']:
+            item['score'] = str(round((int(item['score']) * 100 / 120), 2)) + '%'
+
+    return dict(data=movie_history)
+
+
+# Don't put any route under this one
+@route(base_url + 'api/help')
+def api_help():
+    endpoints = []
+    for route in app.app.routes:
+        if '/api/' in route.rule:
+            endpoints.append(route.rule)
+
+    return dict(endpoints=endpoints)
 
 
 # Mute DeprecationWarning
 warnings.simplefilter("ignore", DeprecationWarning)
+if six.PY3:
+    warnings.simplefilter("ignore", BrokenPipeError)
 server = CherryPyWSGIServer((str(settings.general.ip), (int(args.port) if args.port else int(settings.general.port))), app)
 try:
     logging.info('BAZARR is started and waiting for request on http://' + str(settings.general.ip) + ':' + (str(

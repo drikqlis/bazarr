@@ -1,5 +1,7 @@
 # coding=utf-8
 
+from __future__ import absolute_import
+from __future__ import print_function
 import os
 import requests
 import logging
@@ -12,6 +14,7 @@ from config import settings, url_sonarr
 from list_subtitles import list_missing_subtitles
 from database import database, dict_converter
 from utils import get_sonarr_version
+import six
 from helper import path_replace
 
 
@@ -48,9 +51,9 @@ def update_series():
             return
         else:
             # Get current shows in DB
-            current_shows_db = database.execute("SELECT tvdbId FROM table_shows")
+            current_shows_db = database.execute("SELECT sonarrSeriesId FROM table_shows")
             
-            current_shows_db_list = [x['tvdbId'] for x in current_shows_db]
+            current_shows_db_list = [x['sonarrSeriesId'] for x in current_shows_db]
             current_shows_sonarr = []
             series_to_update = []
             series_to_add = []
@@ -60,7 +63,7 @@ def update_series():
             for i, show in enumerate(r.json(), 1):
                 notifications.write(msg="Getting series data from Sonarr...", queue='get_series', item=i, length=seriesListLength)
                 try:
-                    overview = unicode(show['overview'])
+                    overview = six.text_type(show['overview'])
                 except:
                     overview = ""
                 try:
@@ -79,20 +82,20 @@ def update_series():
                     alternateTitles = None
 
                 # Add shows in Sonarr to current shows list
-                current_shows_sonarr.append(show['tvdbId'])
+                current_shows_sonarr.append(show['id'])
                 
                 if show['tvdbId'] in current_shows_db_list:
-                    series_to_update.append({'title': unicode(show["title"]),
-                                             'path': unicode(show["path"]),
+                    series_to_update.append({'title': six.text_type(show["title"]),
+                                             'path': six.text_type(show["path"]),
                                              'tvdbId': int(show["tvdbId"]),
                                              'sonarrSeriesId': int(show["id"]),
-                                             'overview': unicode(overview),
-                                             'poster': unicode(poster),
-                                             'fanart': unicode(fanart),
-                                             'audio_language': unicode(profile_id_to_language((show['qualityProfileId'] if sonarr_version.startswith('2') else show['languageProfileId']), audio_profiles)),
-                                             'sortTitle': unicode(show['sortTitle']),
-                                             'year': unicode(show['year']),
-                                             'alternateTitles': unicode(alternateTitles)})
+                                             'overview': six.text_type(overview),
+                                             'poster': six.text_type(poster),
+                                             'fanart': six.text_type(fanart),
+                                             'audio_language': six.text_type(profile_id_to_language((show['qualityProfileId'] if get_sonarr_version().startswith('2') else show['languageProfileId']), audio_profiles)),
+                                             'sortTitle': six.text_type(show['sortTitle']),
+                                             'year': six.text_type(show['year']),
+                                             'alternateTitles': six.text_type(alternateTitles)})
                 else:
                     if serie_default_enabled is True:
                         series_to_add.append({'title': show["title"],
@@ -126,8 +129,8 @@ def update_series():
             removed_series = list(set(current_shows_db_list) - set(current_shows_sonarr))
 
             for series in removed_series:
-                database.execute("DELETE FROM table_shows WHERE tvdbId=?",(series,))
-            
+                database.execute("DELETE FROM table_shows WHERE sonarrSEriesId=?",(series,))
+
             # Update existing series in DB
             series_in_db_list = []
             series_in_db = database.execute("SELECT title, path, tvdbId, sonarrSeriesId, overview, poster, fanart, "

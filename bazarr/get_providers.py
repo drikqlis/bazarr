@@ -10,6 +10,7 @@ from get_args import args
 from config import settings
 from subliminal_patch.exceptions import TooManyRequests, APIThrottled, ParseResponseError
 from subliminal.exceptions import DownloadLimitExceeded, ServiceUnavailable
+from subliminal import region as subliminal_cache_region
 
 VALID_THROTTLE_EXCEPTIONS = (TooManyRequests, DownloadLimitExceeded, ServiceUnavailable, APIThrottled,
                              ParseResponseError)
@@ -154,19 +155,27 @@ def provider_throttle(name, exception):
     throttle_until = datetime.datetime.now() + throttle_delta
     
     if cls_name not in VALID_COUNT_EXCEPTIONS or throttled_count(name):
-        tp[name] = (cls_name, throttle_until, throttle_description)
-        settings.general.throtteled_providers = str(tp)
-        with open(os.path.join(args.config_dir, 'config', 'config.ini'), 'w+') as handle:
-            settings.write(handle)
-        
-        logging.info("Throttling %s for %s, until %s, because of: %s. Exception info: %r", name, throttle_description,
-                     throttle_until.strftime("%y/%m/%d %H:%M"), cls_name, exception.message)
+        if cls_name == 'ValueError' and exception.args[0].startswith('unsupported pickle protocol'):
+            for fn in subliminal_cache_region.backend.all_filenames:
+                try:
+                    os.remove(fn)
+                except (IOError, OSError):
+                    logging.debug("Couldn't remove cache file: %s", os.path.basename(fn))
+        else:
+            tp[name] = (cls_name, throttle_until, throttle_description)
+            settings.general.throtteled_providers = str(tp)
+            with open(os.path.join(args.config_dir, 'config', 'config.ini'), 'w+') as handle:
+                settings.write(handle)
+
+            logging.info("Throttling %s for %s, until %s, because of: %s. Exception info: %r", name,
+                         throttle_description, throttle_until.strftime("%y/%m/%d %H:%M"), cls_name, exception.args[0]
+                         if exception.args else None)
 
 
 def throttled_count(name):
     global throttle_count
-    if name in throttle_count.keys():
-        if 'count' in throttle_count[name].keys():
+    if name in list(throttle_count.keys()):
+        if 'count' in list(throttle_count[name].keys()):
             for key, value in throttle_count[name].items():
                 if key == 'count':
                     value += 1
@@ -196,9 +205,14 @@ def throttled_count(name):
 def update_throttled_provider():
     changed = False
     if settings.general.enabled_providers:
-        for provider in settings.general.enabled_providers.lower().split(','):
+        for provider in list(tp):
+            if provider not in settings.general.enabled_providers:
+                del tp[provider]
+                settings.general.throtteled_providers = str(tp)
+                changed = True
+
             reason, until, throttle_desc = tp.get(provider, (None, None, None))
-            
+
             if reason:
                 now = datetime.datetime.now()
                 if now < until:
