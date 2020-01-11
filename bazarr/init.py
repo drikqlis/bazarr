@@ -1,14 +1,15 @@
 # coding=utf-8
 
+from __future__ import absolute_import, print_function
 import os
 import time
 import rarfile
 
 from cork import Cork
-from ConfigParser2 import ConfigParser
 from config import settings
 from get_args import args
 from logger import configure_logging
+from helper import create_path_mapping_dict
 
 from dogpile.cache.region import register_backend as register_cache_backend
 import subliminal
@@ -20,11 +21,11 @@ os.environ["SZ_USER_AGENT"] = "Bazarr/1"
 # set anti-captcha provider and key
 if settings.general.anti_captcha_provider == 'anti-captcha' and settings.anticaptcha.anti_captcha_key != "":
     os.environ["ANTICAPTCHA_CLASS"] = 'AntiCaptchaProxyLess'
-    os.environ["ANTICAPTCHA_ACCOUNT_KEY"] = settings.anticaptcha.anti_captcha_key
+    os.environ["ANTICAPTCHA_ACCOUNT_KEY"] = str(settings.anticaptcha.anti_captcha_key)
 elif settings.general.anti_captcha_provider == 'death-by-captcha' and settings.deathbycaptcha.username != "" and settings.deathbycaptcha.password != "":
     os.environ["ANTICAPTCHA_CLASS"] = 'DeathByCaptchaProxyLess'
-    os.environ["ANTICAPTCHA_ACCOUNT_KEY"] = ':'.join(
-        {settings.deathbycaptcha.username, settings.deathbycaptcha.password})
+    os.environ["ANTICAPTCHA_ACCOUNT_KEY"] = str(':'.join(
+        {settings.deathbycaptcha.username, settings.deathbycaptcha.password}))
 else:
     os.environ["ANTICAPTCHA_CLASS"] = ''
 
@@ -34,7 +35,7 @@ if not os.path.exists(args.config_dir):
     try:
         os.mkdir(os.path.join(args.config_dir))
     except OSError:
-        print "BAZARR The configuration directory doesn't exist and Bazarr cannot create it (permission issue?)."
+        print("BAZARR The configuration directory doesn't exist and Bazarr cannot create it (permission issue?).")
         exit(2)
 
 if not os.path.exists(os.path.join(args.config_dir, 'config')):
@@ -48,6 +49,14 @@ if not os.path.exists(os.path.join(args.config_dir, 'cache')):
 
 configure_logging(settings.general.getboolean('debug') or args.debug)
 import logging
+
+# create random api_key if there's none in config.ini
+if not settings.auth.apikey:
+    from binascii import hexlify
+    from six import text_type
+    settings.auth.apikey = text_type(hexlify(os.urandom(16)))
+    with open(os.path.join(args.config_dir, 'config', 'config.ini'), 'w+') as handle:
+        settings.write(handle)
 
 # create database file
 if not os.path.exists(os.path.join(args.config_dir, 'db', 'bazarr.db')):
@@ -82,8 +91,6 @@ if not os.path.exists(os.path.join(args.config_dir, 'config', 'releases.txt')):
     logging.debug("BAZARR Created releases file")
 
 config_file = os.path.normpath(os.path.join(args.config_dir, 'config', 'config.ini'))
-
-cfg = ConfigParser()
 
 if not os.path.exists(os.path.normpath(os.path.join(args.config_dir, 'config', 'users.json'))):
     cork = Cork(os.path.normpath(os.path.join(args.config_dir, 'config')), initialize=True)
@@ -124,3 +131,4 @@ def init_binaries():
 
 
 init_binaries()
+create_path_mapping_dict()

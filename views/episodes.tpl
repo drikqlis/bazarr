@@ -74,6 +74,8 @@
 				background-color: #ffcccc !important;
 				line-height: 0 !important;
 			}
+
+			.episode_history { cursor: pointer; }
 		</style>
 
 		<script>
@@ -81,7 +83,7 @@
             	$('.ui.accordion').accordion();
             	const first_season_acc_title = document.getElementsByClassName("title")[0];
             	first_season_acc_title.className += " active";
-            	const first_season_acc_content = document.getElementsByClassName("content")[0];
+            	const first_season_acc_content = document.getElementsByClassName("content season")[0];
             	first_season_acc_content.className += " active";
             });
 		</script>
@@ -189,7 +191,7 @@
 								</div>
 							</div>
 						</div>
-						<div class="content">
+						<div class="content season">
 							<table class="ui very basic single line selectable table">
 								<thead>
 									<tr>
@@ -217,12 +219,12 @@
 											% if episode['scene_name'] is not None:
 											<span data-tooltip="Scenename is: {{episode['scene_name']}}" data-inverted='' data-position="top left"><i class="info circle icon"></i></span>
                                        	% end
-											<span data-tooltip="Path is: {{episode['path']}}" data-inverted='' data-position="top left">{{episode['title']}}</span>
+											<span data-tooltip="Path is: {{episode['path']}}" data-inverted='' data-position="top left"><a data-series_title="{{details['title']}}" data-season="{{episode['season']}}" data-episode="{{episode['episode']}}" data-episode_title="{{episode['title']}}" data-sonarrEpisodeId="{{episode['sonarrEpisodeId']}}" class="episode_history">{{episode['title']}}</a></span>
 										</td>
 										<td>
 										%if episode['subtitles'] is not None:
 										%	actual_languages = ast.literal_eval(episode['subtitles'])
-                                        %   actual_languages.sort()
+										%   actual_languages.sort(key=lambda x: x[0])
 										%else:
 										%	actual_languages = '[]'
 										%end
@@ -379,10 +381,33 @@
 			</div>
 		</div>
 
+		<div class="episode_dialog ui modal">
+			<i class="close icon"></i>
+			<div class="header">
+				<span class="series_title_span"></span> - <span class="season_span"></span>x<span class="episode_span"></span> - <span class="episode_title_span"></span>
+			</div>
+			<div class="scrolling content">
+				<table id="episode_result" class="display" style="width:100%">
+					<thead>
+						<tr>
+							<th></th>
+							<th style="text-align: left;">Language.:</th>
+							<th style="text-align: left;">Provider:</th>
+							<th style="text-align: left;">Score:</th>
+							<th style="text-align: left;">Date:</th>
+						</tr>
+					</thead>
+				</table>
+			</div>
+			<div class="actions">
+				<button class="ui cancel button" >Cancel</button>
+			</div>
+		</div>
+
 		<div class="search_dialog ui modal">
 			<i class="close icon"></i>
 			<div class="header">
-				<span id="series_title_span"></span> - <span id="season"></span>x<span id="episode"></span> - <span id="episode_title"></span>
+				<span class="series_title_span"></span> - <span class="season_span"></span>x<span class="episode_span"></span> - <span class="episode_title_span"></span>
 				<br><h5>Episode path is: <div class="ui tiny inverted label" style="background-color: #35c5f4;"><span id="episode_path_span"></span></div>
 				<br>Scenename is: <div class="ui tiny inverted label" style="background-color: orange;"><span id="episode_scenename_span"></span></div></h5>
 			</div>
@@ -531,7 +556,7 @@
 		});
 	});
 
-	$('a:not(.manual_search, .manual_upload), .menu .item, button:not(#config, .cancel, #search_missing_subtitles)').on('click', function(){
+	$('a:not(.manual_search, .manual_upload, .episode_history), .menu .item, button:not(#config, .cancel, #search_missing_subtitles)').on('click', function(){
 		$('#loader').addClass('active');
 	});
 
@@ -564,11 +589,56 @@
 			.modal('show');
 	});
 
+	$('.episode_history').on('click', function(){
+		$(".series_title_span").html($(this).data("series_title"));
+		$(".season_span").html($(this).data("season"));
+		$(".episode_span").html($(this).data("episode"));
+		$(".episode_title_span").html($(this).data("episode_title"));
+
+		sonarrEpisodeId = $(this).attr("data-sonarrEpisodeId");
+
+		$('#episode_result').DataTable( {
+		    destroy: true,
+		    language: {
+				loadingRecords: '<br><div class="ui active inverted dimmer" style="width: 95%;"><div class="ui centered inline loader"></div></div><br>',
+				zeroRecords: 'No History Records Found For This Episode'
+		    },
+		    paging: true,
+    		lengthChange: false,
+			pageLength: 5,
+    		searching: true,
+    		ordering: true,
+    		processing: false,
+        	serverSide: false,
+        	ajax: {
+				url: '{{base_url}}episode_history/' + sonarrEpisodeId
+			},
+			drawCallback: function(settings) {
+                $('.inline.dropdown').dropdown();
+                $('.ui.accordion').accordion();
+			},
+			columns: [
+				{ data: 'action'},
+				{ data: 'language' },
+				{ data: 'provider' },
+				{ data: 'score'},
+				{ data: 'timestamp' }
+			]
+		} );
+
+		$('.episode_dialog')
+			.modal({
+				centered: false,
+				autofocus: false
+			})
+			.modal('show');
+	});
+
 	$('.manual_search').on('click', function(){
-		$("#series_title_span").html($(this).data("series_title"));
-		$("#season").html($(this).data("season"));
-		$("#episode").html($(this).data("episode"));
-		$("#episode_title").html($(this).data("episode_title"));
+		$(".series_title_span").html($(this).data("series_title"));
+		$(".season_span").html($(this).data("season"));
+		$(".episode_span").html($(this).data("episode"));
+		$(".episode_title_span").html($(this).data("episode_title"));
 		$("#episode_path_span").html($(this).attr("data-episodePath"));
 		$("#episode_scenename_span").html($(this).attr("data-sceneName"));
 
@@ -663,7 +733,7 @@
 				render: function ( data, type, row ) {
                     const array_release_info = data.release_info;
                     let i;
-                    let text = '<div class="ui fluid accordion"><div class="title"><i class="dropdown icon"></i>...</div><div class="content">';
+                    let text = '<div class="ui fluid accordion"><div class="title"><i class="dropdown icon"></i>...</div><div class="content season">';
                     for (i = 0; i < array_release_info.length; i++) {
                         text += '<div class="ui tiny label" style="margin-bottom: 2px;">' + array_release_info[i] + '</div>';
                     }

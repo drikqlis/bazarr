@@ -1,6 +1,7 @@
 # coding=utf-8
 
 
+from __future__ import absolute_import
 import logging
 import traceback
 
@@ -19,6 +20,15 @@ from subliminal import Subtitle as Subtitle_
 from subliminal.subtitle import Episode, Movie, sanitize_release_group, get_equivalent_release_groups
 from subliminal_patch.utils import sanitize
 from ftfy import fix_text
+from codecs import BOM_UTF8, BOM_UTF16_BE, BOM_UTF16_LE, BOM_UTF32_BE, BOM_UTF32_LE
+
+BOMS = (
+    (BOM_UTF8, "UTF-8"),
+    (BOM_UTF32_BE, "UTF-32-BE"),
+    (BOM_UTF32_LE, "UTF-32-LE"),
+    (BOM_UTF16_BE, "UTF-16-BE"),
+    (BOM_UTF16_LE, "UTF-16-LE"),
+)
 
 logger = logging.getLogger(__name__)
 
@@ -103,7 +113,10 @@ class Subtitle(Subtitle_):
         self.set_encoding("utf-8")
 
         # normalize line endings
-        self.content = self.content.replace("\r\n", "\n").replace('\r', '\n')
+        self.content = self.content.replace(b"\r\n", b"\n").replace(b'\r', b'\n')
+
+    def _check_bom(self, data):
+        return [encoding for bom, encoding in BOMS if data.startswith(bom)]
 
     def guess_encoding(self):
         """Guess encoding using the language, falling back on chardet.
@@ -118,6 +131,11 @@ class Subtitle(Subtitle_):
         logger.info('Guessing encoding for language %s', self.language)
 
         encodings = ['utf-8']
+
+        # check UTF BOMs
+        bom_encodings = self._check_bom(self.content)
+        if bom_encodings:
+            encodings = list(set(enc.lower() for enc in bom_encodings + encodings))
 
         # add language-specific encodings
         # http://scratchpad.wikia.com/wiki/Character_Encoding_Recommendation_for_Languages
@@ -272,9 +290,9 @@ class Subtitle(Subtitle_):
         def prepare_text(text, style):
             body = []
             for fragment, sty in parse_tags(text, style, sub.styles):
-                fragment = fragment.replace(ur"\h", u" ")
-                fragment = fragment.replace(ur"\n", u"\n")
-                fragment = fragment.replace(ur"\N", u"\n")
+                fragment = fragment.replace(r"\h", u" ")
+                fragment = fragment.replace(r"\n", u"\n")
+                fragment = fragment.replace(r"\N", u"\n")
                 if format == "srt":
                     if sty.italic:
                         fragment = u"<i>%s</i>" % fragment
@@ -362,7 +380,7 @@ def guess_matches(video, guess, partial=False):
         # series
         if video.series and 'title' in guess:
             titles = guess["title"]
-            if not isinstance(titles, types.ListType):
+            if not isinstance(titles, list):
                 titles = [titles]
 
             for title in titles:
@@ -401,7 +419,7 @@ def guess_matches(video, guess, partial=False):
     # release_group
     if 'release_group' in guess:
         release_groups = guess["release_group"]
-        if not isinstance(release_groups, types.ListType):
+        if not isinstance(release_groups, list):
             release_groups = [release_groups]
 
         if video.release_group:
@@ -418,7 +436,7 @@ def guess_matches(video, guess, partial=False):
     # format
     if 'format' in guess:
         formats = guess["format"]
-        if not isinstance(formats, types.ListType):
+        if not isinstance(formats, list):
             formats = [formats]
 
         if video.format:

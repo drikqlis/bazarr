@@ -1,20 +1,33 @@
 # coding=utf-8
+from __future__ import absolute_import
 import ast
 import os
 import re
-import types
 import logging
+
 import chardet
 from bs4 import UnicodeDammit
 
 from config import settings
 
 
+def create_path_mapping_dict():
+    global path_mapping_series
+    path_mapping_series = ast.literal_eval(settings.general.path_mappings)
+
+    global path_mapping_movies
+    path_mapping_movies = ast.literal_eval(settings.general.path_mappings_movie)
+
+
 def path_replace(path):
     if path is None:
         return None
 
-    for path_mapping in ast.literal_eval(settings.general.path_mappings):
+    for path_mapping in path_mapping_series:
+        if path_mapping[0] == path_mapping[1]:
+            continue
+        if '' in path_mapping:
+            continue
         if path_mapping[0] in path:
             path = path.replace(path_mapping[0], path_mapping[1])
             if path.startswith('\\\\') or re.match(r'^[a-zA-Z]:\\', path):
@@ -29,7 +42,11 @@ def path_replace_reverse(path):
     if path is None:
         return None
 
-    for path_mapping in ast.literal_eval(settings.general.path_mappings):
+    for path_mapping in path_mapping_series:
+        if path_mapping[0] == path_mapping[1]:
+            continue
+        if '' in path_mapping:
+            continue
         if path_mapping[1] in path:
             path = path.replace(path_mapping[1], path_mapping[0])
             if path.startswith('\\\\') or re.match(r'^[a-zA-Z]:\\', path):
@@ -44,7 +61,11 @@ def path_replace_movie(path):
     if path is None:
         return None
 
-    for path_mapping in ast.literal_eval(settings.general.path_mappings_movie):
+    for path_mapping in path_mapping_movies:
+        if path_mapping[0] == path_mapping[1]:
+            continue
+        if '' in path_mapping:
+            continue
         if path_mapping[0] in path:
             path = path.replace(path_mapping[0], path_mapping[1])
             if path.startswith('\\\\') or re.match(r'^[a-zA-Z]:\\', path):
@@ -59,7 +80,11 @@ def path_replace_reverse_movie(path):
     if path is None:
         return None
 
-    for path_mapping in ast.literal_eval(settings.general.path_mappings_movie):
+    for path_mapping in path_mapping_movies:
+        if path_mapping[0] == path_mapping[1]:
+            continue
+        if '' in path_mapping:
+            continue
         if path_mapping[1] in path:
             path = path.replace(path_mapping[1], path_mapping[0])
             if path.startswith('\\\\') or re.match(r'^[a-zA-Z]:\\', path):
@@ -126,7 +151,7 @@ def force_unicode(s):
     :param s: string
     :return: unicode string
     """
-    if not isinstance(s, types.UnicodeType):
+    if not isinstance(s, str):
         try:
             s = s.decode("utf-8")
         except UnicodeDecodeError:
