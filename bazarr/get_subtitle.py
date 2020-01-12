@@ -248,7 +248,7 @@ def download_subtitle(path, language, hi, forced, providers, providers_auth, sce
                                 out, err = process.communicate()
                                 if os.name == 'nt':
                                     out = out.decode(encoding)
-                                out = out.decode('utf-8')
+                                out = str(out)
                             except:
                                 if out == "":
                                     logging.error(
@@ -472,7 +472,7 @@ def manual_download_subtitle(path, language, hi, forced, subtitle, provider, pro
                                 out, err = process.communicate()
                                 if os.name == 'nt':
                                     out = out.decode(encoding)
-                                out = out.decode('utf-8')
+                                out = str(out)
                             except:
                                 if out == "":
                                     logging.error(
