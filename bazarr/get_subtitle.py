@@ -246,7 +246,7 @@ def download_subtitle(path, language, hi, forced, providers, providers_auth, sce
                                                            stderr=subprocess.PIPE)
                                 # wait for the process to terminate
                                 out, err = process.communicate()
-                                
+                                out = str(out)
                                 if os.name == 'nt':
                                     out = out.decode(encoding)
                             
