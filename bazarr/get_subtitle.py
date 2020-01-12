@@ -246,7 +246,8 @@ def download_subtitle(path, language, hi, forced, providers, providers_auth, sce
                                                            stderr=subprocess.PIPE)
                                 # wait for the process to terminate
                                 out, err = process.communicate()
-                                out = str(out)
+                                out = out.decode('utf-8')
+                                output_list = output.splitlines()
                                 if os.name == 'nt':
                                     out = out.decode(encoding)
                             
@@ -257,11 +258,11 @@ def download_subtitle(path, language, hi, forced, providers, providers_auth, sce
                                 else:
                                     logging.error('BAZARR Post-processing result for file ' + path + ' : ' + out)
                             else:
-                                if out == "":
+                                if "Conversion succesfull" in output_list[-1]:
                                     logging.info(
-                                        'BAZARR Post-processing result for file ' + path + ' : Nothing returned from command execution')
+                                        'BAZARR Post-processing result for file ' + path + ' : Conversion succesfull')
                                 else:
-                                    logging.info('BAZARR Post-processing result for file ' + path + ' : ' + out)
+                                    logging.error('BAZARR Post-processing result for file ' + path + ' : Conversion failed')
                         
                         # fixme: support multiple languages at once
                         if media_type == 'series':
