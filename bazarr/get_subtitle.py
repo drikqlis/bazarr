@@ -472,7 +472,8 @@ def manual_download_subtitle(path, language, hi, forced, subtitle, provider, pro
                                                            stderr=subprocess.PIPE)
                                 # wait for the process to terminate
                                 out, err = process.communicate()
-                                
+                                out = out.decode('utf-8')
+                                output_list = output.splitlines()
                                 if os.name == 'nt':
                                     out = out.decode(encoding)
                             
@@ -483,11 +484,11 @@ def manual_download_subtitle(path, language, hi, forced, subtitle, provider, pro
                                 else:
                                     logging.error('BAZARR Post-processing result for file ' + path + ' : ' + out)
                             else:
-                                if out == "":
+                                if "Conversion succesfull" in output_list[-1]:
                                     logging.info(
-                                        'BAZARR Post-processing result for file ' + path + ' : Nothing returned from command execution')
+                                        'BAZARR Post-processing result for file ' + path + ' : Conversion succesfull')
                                 else:
-                                    logging.info('BAZARR Post-processing result for file ' + path + ' : ' + out)
+                                    logging.error('BAZARR Post-processing result for file ' + path + ' : Conversion failed')
                         
                         if media_type == 'series':
                             reversed_path = path_replace_reverse(path)
@@ -510,7 +511,6 @@ def manual_download_subtitle(path, language, hi, forced, subtitle, provider, pro
 
 def manual_upload_subtitle(path, language, forced, title, scene_name, media_type, subtitle):
     logging.debug('BAZARR Manually uploading subtitles for this file: ' + path)
-
     single = settings.general.getboolean('single_language')
 
     chmod = int(settings.general.chmod, 8) if not sys.platform.startswith(
