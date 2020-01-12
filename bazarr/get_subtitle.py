@@ -249,8 +249,6 @@ def download_subtitle(path, language, hi, forced, providers, providers_auth, sce
                                 if os.name == 'nt':
                                     out = out.decode(encoding)
                                 out = out.decode('utf-8')
-                                output_list = out.splitlines()
-                            
                             except:
                                 if out == "":
                                     logging.error(
@@ -258,11 +256,11 @@ def download_subtitle(path, language, hi, forced, providers, providers_auth, sce
                                 else:
                                     logging.error('BAZARR Post-processing result for file ' + path + ' : ' + out)
                             else:
-                                if "Conversion succesfull" in output_list[-1]:
+                                if "Conversion succesfull" in out:
                                     logging.info(
                                         'BAZARR Post-processing result for file ' + path + ' : Conversion succesfull')
                                 else:
-                                    logging.error('BAZARR Post-processing result for file ' + path + ' : Conversion failed')
+                                    logging.error('BAZARR Post-processing result for file ' + path + ' : Conversion failed: ' + out)
                         
                         # fixme: support multiple languages at once
                         if media_type == 'series':
@@ -475,7 +473,6 @@ def manual_download_subtitle(path, language, hi, forced, subtitle, provider, pro
                                 if os.name == 'nt':
                                     out = out.decode(encoding)
                                 out = out.decode('utf-8')
-                                output_list = out.splitlines()
                             except:
                                 if out == "":
                                     logging.error(
@@ -483,11 +480,11 @@ def manual_download_subtitle(path, language, hi, forced, subtitle, provider, pro
                                 else:
                                     logging.error('BAZARR Post-processing result for file ' + path + ' : ' + out)
                             else:
-                                if "Conversion succesfull" in output_list[-1]:
+                                if "Conversion succesfull" in out:
                                     logging.info(
                                         'BAZARR Post-processing result for file ' + path + ' : Conversion succesfull')
                                 else:
-                                    logging.error('BAZARR Post-processing result for file ' + path + ' : Conversion failed')
+                                    logging.error('BAZARR Post-processing result for file ' + path + ' : Conversion failed: ' + out)
                         
                         if media_type == 'series':
                             reversed_path = path_replace_reverse(path)
