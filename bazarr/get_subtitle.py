@@ -246,10 +246,10 @@ def download_subtitle(path, language, hi, forced, providers, providers_auth, sce
                                                            stderr=subprocess.PIPE)
                                 # wait for the process to terminate
                                 out, err = process.communicate()
-                                out = out.decode('utf-8')
-                                output_list = output.splitlines()
                                 if os.name == 'nt':
                                     out = out.decode(encoding)
+                                out = out.decode('utf-8')
+                                output_list = out.splitlines()
                             
                             except:
                                 if out == "":
@@ -472,11 +472,10 @@ def manual_download_subtitle(path, language, hi, forced, subtitle, provider, pro
                                                            stderr=subprocess.PIPE)
                                 # wait for the process to terminate
                                 out, err = process.communicate()
-                                out = out.decode('utf-8')
-                                output_list = output.splitlines()
                                 if os.name == 'nt':
                                     out = out.decode(encoding)
-                            
+                                out = out.decode('utf-8')
+                                output_list = out.splitlines()
                             except:
                                 if out == "":
                                     logging.error(
