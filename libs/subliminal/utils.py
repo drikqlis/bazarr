@@ -37,20 +37,17 @@ def hash_opensubtitles(video_path):
             filehash &= 0xFFFFFFFFFFFFFFFF
     returnedhash = '%016x' % filehash
 	# If exist, use hash from hash file
-    filename=os.path.splitext(os.path.basename(video_path))[0]
-    dirpath=os.path.dirname(video_path)
-    hashpath = os.path.abspath(os.path.join(dirpath, filename + '.openhash'))
-    if (os.path.isfile(hashpath)):
+    hashfile = os.path.join(os.path.splitext(video_path)[0]  + '.openhash')
+    if (os.path.isfile(hashfile)):
         try:
-            f_open = open(hashpath, "r")
+            f_open = open(hashfile, "r")
             hashandsize = f_open.read()
             hashandsize = hashandsize.split(";")
             returnedhash = hashandsize[0]
             f_open.close()
+            logger.info("Read hash from file for: " + video_path)
         except:
-            file = open("/var/log/sickbeard_mp4_automator/test.txt", "a+")
-            file.write("error opensubtiles")
-            file.close()
+            logger.exception("Failed reading hash from file for: " + video_path)
     return returnedhash
 # Added Drik 1 stop
 
@@ -86,18 +83,14 @@ def hash_napiprojekt(video_path):
         data = f.read(readsize)
     hash_napi = hashlib.md5(data).hexdigest()
 	# If exist, use hash from hash file
-    filename=os.path.splitext(os.path.basename(video_path))[0]
-    dirpath=os.path.dirname(video_path)
-    hashpath = os.path.abspath(os.path.join(dirpath, filename + '.napihash'))
-    if (os.path.isfile(hashpath)):
+    hashfile = os.path.join(os.path.splitext(video_path)[0]  + '.napihash')
+    if (os.path.isfile(hashfile)):
         try:
-            f_napi = open(hashpath, "r")
+            f_napi = open(hashfile, "r")
             hash_napi = f_napi.read()
-            f_napi.close()
+            logger.info("Read hash from file for: " + video_path)
         except:
-            file = open("/var/log/sickbeard_mp4_automator/test.txt", "a+")
-            file.write("error opensubtiles")
-            file.close()
+            logger.exception("Failed reading hash from file for: " + video_path)
     return hash_napi
 # Added Drik 2 stop
 
