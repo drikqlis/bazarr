@@ -545,6 +545,10 @@ def scan_video(path, dont_use_actual_file=False, hints=None, providers=None, ski
         logger.info("Path of file is: " + hash_from)
         logger.info("Path of file is: " + hash_path)
         hashfile = os.path.join(os.path.splitext(hash_path)[0]  + '.openhash')
+        logger.info(sys.getfilesystemencoding())
+        path2 = os.path.abspath("/mnt/media/Seriale/Narcos/Season 2/Narcos - S02E08 - Exit El Patrón - [Bluray-1080p - x265 10bit - AAC 5.1 - Vyndros].mp4")
+        logger.info(path2)
+
         if (os.path.isfile(hashfile)):
             try:
                 f_open = open(hashfile, "r")
@@ -556,7 +560,7 @@ def scan_video(path, dont_use_actual_file=False, hints=None, providers=None, ski
             except:
                 logger.exception("Failed reading size from file for: " + hash_path)
         else:
-            video.size = 9999999999
+            video.size = os.path.getsize(hash_path)
 		# Drik add 1
         if video.size > 10485760:
             logger.debug('Size is %d', video.size)
