@@ -1,10 +1,11 @@
 {
   "ExpandedNodes": [
     "",
+    "\\bazarr",
     "\\libs",
     "\\libs\\subliminal",
     "\\libs\\subliminal_patch"
   ],
-  "SelectedNode": "\\libs\\subliminal\\utils.py",
+  "SelectedNode": "\\bazarr\\get_subtitle.py",
   "PreviewInSolutionExplorer": false
 }

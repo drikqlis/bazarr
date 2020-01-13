@@ -8,6 +8,7 @@ cachefile.dbm
 bazarr.pid
 /venv
 /data
+/.vs
 
 # Allow
 !*.dll
