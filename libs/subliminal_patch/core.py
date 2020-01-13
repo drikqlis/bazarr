@@ -541,6 +541,7 @@ def scan_video(path, dont_use_actual_file=False, hints=None, providers=None, ski
         hash_path = hash_from or path
 		# Drik add 1
 		# If exist, use hash from hash file
+        logger.info("Path of file is: " + hash_path)
         hashfile = os.path.join(os.path.splitext(hash_path)[0]  + '.openhash')
         if (os.path.isfile(hashfile)):
             try:
@@ -549,9 +550,9 @@ def scan_video(path, dont_use_actual_file=False, hints=None, providers=None, ski
                 hashandsize = hashandsize.split(";")
                 video.size = int(hashandsize[1])
                 f_open.close()
-                logger.info("Read hash from file for: " + hash_path)
+                logger.info("Read size from file for: " + hash_path)
             except:
-                logger.exception("Failed reading hash from file for: " + hash_path)
+                logger.exception("Failed reading size from file for: " + hash_path)
         else:
             video.size = os.path.getsize(hash_path)
 		# Drik add 1
