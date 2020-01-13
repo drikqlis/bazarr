@@ -5,8 +5,9 @@ import hashlib
 import os
 import re
 import struct
+import logging
 from six.moves import range
-
+logger = logging.getLogger('core')
 
 # Added Drik 1 start
 def hash_opensubtitles(video_path):
