@@ -38,7 +38,7 @@ def hash_opensubtitles(video_path):
     returnedhash = '%016x' % filehash
 	# If exist, use hash from hash file
     hashfile = os.path.join(os.path.splitext(video_path)[0]  + '.openhash')
-    if (os.path.isfile(hashpath)):
+    if (os.path.isfile(hashfile)):
         try:
             f_open = open(hashfile, "r")
             hashandsize = f_open.read()
