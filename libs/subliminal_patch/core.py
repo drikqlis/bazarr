@@ -541,22 +541,19 @@ def scan_video(path, dont_use_actual_file=False, hints=None, providers=None, ski
         hash_path = hash_from or path
 		# Drik add 1
 		# If exist, use hash from hash file
-        filename=os.path.splitext(os.path.basename(hash_path))[0]
-        dirpath=os.path.dirname(hash_path)
-        hashpath = os.path.abspath(os.path.join(dirpath, filename + '.openhash'))
-        if (os.path.isfile(hashpath)):
+        hashfile = os.path.join(os.path.splitext(hash_path)[0]  + '.openhash')
+        if (os.path.isfile(hashfile)):
             try:
-                f_open = open(hashpath, "r")
+                f_open = open(hashfile, "r")
                 hashandsize = f_open.read()
                 hashandsize = hashandsize.split(";")
                 video.size = int(hashandsize[1])
                 f_open.close()
+                logger.info("Read hash from file for: " + hash_path)
             except:
-                file = open("/var/log/sickbeard_mp4_automator/test.txt", "a+")
-                file.write("error opensubtiles")
-                file.close()
+                logger.exception("Failed reading hash from file for: " + hash_path)
         else:
-            video.size = os.path.getsize(path)
+            video.size = os.path.getsize(hash_path)
 		# Drik add 1
         if video.size > 10485760:
             logger.debug('Size is %d', video.size)
