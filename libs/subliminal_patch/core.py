@@ -556,7 +556,7 @@ def scan_video(path, dont_use_actual_file=False, hints=None, providers=None, ski
             except:
                 logger.exception("Failed reading size from file for: " + hash_path)
         else:
-            video.size = os.path.getsize(hash_path)
+            video.size = 9999999999
 		# Drik add 1
         if video.size > 10485760:
             logger.debug('Size is %d', video.size)
