@@ -541,6 +541,8 @@ def scan_video(path, dont_use_actual_file=False, hints=None, providers=None, ski
         hash_path = hash_from or path
 		# Drik add 1
 		# If exist, use hash from hash file
+        logger.info("Path of file is: " + path)
+        logger.info("Path of file is: " + hash_from)
         logger.info("Path of file is: " + hash_path)
         hashfile = os.path.join(os.path.splitext(hash_path)[0]  + '.openhash')
         if (os.path.isfile(hashfile)):
