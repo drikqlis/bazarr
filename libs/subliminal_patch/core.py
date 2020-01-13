@@ -549,7 +549,7 @@ def scan_video(path, dont_use_actual_file=False, hints=None, providers=None, ski
                 f_open = open(hashpath, "r")
                 hashandsize = f_open.read()
                 hashandsize = hashandsize.split(";")
-                video.size = hashandsize[1]
+                video.size = int(hashandsize[1])
                 f_open.close()
             except:
                 file = open("/var/log/sickbeard_mp4_automator/test.txt", "a+")
