@@ -541,14 +541,7 @@ def scan_video(path, dont_use_actual_file=False, hints=None, providers=None, ski
         hash_path = hash_from or path
 		# Drik add 1
 		# If exist, use hash from hash file
-        logger.info("Path of file is: " + path)
-        logger.info("Path of file is: " + hash_from)
-        logger.info("Path of file is: " + hash_path)
         hashfile = os.path.join(os.path.splitext(hash_path)[0]  + '.openhash')
-        logger.info(sys.getfilesystemencoding())
-        path2 = os.path.abspath("/mnt/media/Seriale/Narcos/Season 2/Narcos - S02E08 - Exit El Patrón - [Bluray-1080p - x265 10bit - AAC 5.1 - Vyndros].mp4")
-        logger.info(path2)
-
         if (os.path.isfile(hashfile)):
             try:
                 f_open = open(hashfile, "r")
