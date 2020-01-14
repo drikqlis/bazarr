@@ -7,7 +7,7 @@ import re
 import struct
 import logging
 from six.moves import range
-logger = logging.getLogger('core')
+logger = logging.getLogger('subliminal_patch.core')
 
 # Added Drik 1 start
 def hash_opensubtitles(video_path):
@@ -46,7 +46,7 @@ def hash_opensubtitles(video_path):
             hashandsize = hashandsize.split(";")
             returnedhash = hashandsize[0]
             f_open.close()
-            logger.info("Read hash from file for: " + video_path)
+            logger.debug("Read hash from file for: " + video_path)
         except:
             logger.exception("Failed reading hash from file for: " + video_path)
     return returnedhash
@@ -89,7 +89,7 @@ def hash_napiprojekt(video_path):
         try:
             f_napi = open(hashfile, "r")
             hash_napi = f_napi.read()
-            logger.info("Read hash from file for: " + video_path)
+            logger.debug("Read hash from file for: " + video_path)
         except:
             logger.exception("Failed reading hash from file for: " + video_path)
     return hash_napi

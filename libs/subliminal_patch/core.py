@@ -549,7 +549,7 @@ def scan_video(path, dont_use_actual_file=False, hints=None, providers=None, ski
                 hashandsize = hashandsize.split(";")
                 video.size = int(hashandsize[1])
                 f_open.close()
-                logger.info("Read size from file for: " + hash_path)
+                logger.debug("Read size from text file for: " + hash_path)
             except:
                 logger.exception("Failed reading size from file for: " + hash_path)
         else:
