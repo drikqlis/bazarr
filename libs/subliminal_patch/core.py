@@ -174,7 +174,7 @@ class SZProviderPool(ProviderPool):
             seen = []
             out = []
             for s in results:
-                if (str(provider), str(s.id)) in self.blacklist:
+                if (str(provider) + ';' + str(s.id)) in self.blacklist:
                     logger.info("Skipping blacklisted subtitle: %s", s)
                     continue
                 if s.id in seen:
