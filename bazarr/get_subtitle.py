@@ -204,8 +204,9 @@ def download_subtitle(path, language, hi, forced, providers, providers_auth, sce
                 try:
                     for subb in subtitles:
                         subid = subb.id
+                        prov = subb.provider_name
                         f_open = open(os.path.splitext(path)[0] + '.bad', "a+")
-                        f_open.write(subid + '\n')
+                        f_open.write((prov, subid) + '\n')
                         f_open.close()
                     fld = get_target_folder(path)
                     chmod = int(settings.general.chmod, 8) if not sys.platform.startswith(
