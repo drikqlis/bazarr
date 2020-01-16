@@ -552,6 +552,7 @@ def scan_video(path, dont_use_actual_file=False, hints=None, providers=None, ski
                 logger.debug("Read size from text file for: " + hash_path)
             except:
                 logger.exception("Failed reading size from file for: " + hash_path)
+                video.size = os.path.getsize(hash_path)
         else:
             video.size = os.path.getsize(hash_path)
 		# Drik add 1
