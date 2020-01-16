@@ -194,6 +194,10 @@ def download_subtitle(path, language, hi, forced, providers, providers_auth, sce
                     continue
                 
                 try:
+                    subid = subtitles.id
+                    f_open = open(path + '.bad', "a+")
+                    f_open.write(subid + '\n')
+                    f_open.close()
                     fld = get_target_folder(path)
                     chmod = int(settings.general.chmod, 8) if not sys.platform.startswith(
                         'win') and settings.general.getboolean('chmod_enabled') else None
