@@ -171,13 +171,21 @@ def download_subtitle(path, language, hi, forced, providers, providers_auth, sce
         if providers:
             if forced_minimum_score:
                 min_score = int(forced_minimum_score) + 1
+            bad_file = os.path.splitext(path)[0] + '.bad'
+            blacklist_new = []
+            if os.path.isfile(bad_file):
+                f2_open = open(bad_file, "r")
+                bad_hashes = f2_open.read()
+                bad_hashes_list = bad_hashes.splitlines()
+                blacklist_new = [line2 for line2 in bad_hashes_list if line2.strip() != '']
+                f2_open.close()
             downloaded_subtitles = download_best_subtitles({video}, language_set, int(min_score), hi,
                                                            providers=providers,
                                                            provider_configs=providers_auth,
                                                            pool_class=provider_pool(),
                                                            compute_score=compute_score,
                                                            throttle_time=None,  # fixme
-                                                           blacklist=None,  # fixme
+                                                           blacklist=blacklist_new,  # fixme
                                                            throttle_callback=provider_throttle,
                                                            pre_download_hook=None,  # fixme
                                                            post_download_hook=None,  # fixme
@@ -196,7 +204,7 @@ def download_subtitle(path, language, hi, forced, providers, providers_auth, sce
                 try:
                     for subb in subtitles:
                         subid = subb.id
-                        f_open = open(path + '.bad', "a+")
+                        f_open = open(os.path.splitext(path)[0] + '.bad', "a+")
                         f_open.write(subid + '\n')
                         f_open.close()
                     fld = get_target_folder(path)
