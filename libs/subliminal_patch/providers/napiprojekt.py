@@ -37,8 +37,8 @@ class NapiProjektSubtitle(_NapiProjektSubtitle):
         matches = set()
 
         # hash
-        if 'napiprojekt' in video.hashes and video.hashes['napiprojekt'] == self.hash:
-            matches.add('hash')
+        #if 'napiprojekt' in video.hashes and video.hashes['napiprojekt'] == self.hash:
+        matches.add('hash')
 
         return matches
 
