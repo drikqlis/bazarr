@@ -5,7 +5,6 @@ import logging
 from subliminal.providers.napiprojekt import NapiProjektProvider as _NapiProjektProvider, \
     NapiProjektSubtitle as _NapiProjektSubtitle, get_subhash
 from subzero.language import Language
-from ..subtitle import Subtitle
 import subprocess
 import requests
 import time
@@ -14,7 +13,7 @@ from bs4 import BeautifulSoup
 logger = logging.getLogger(__name__)
 
 
-class NapiProjektSubtitle(Subtitle):
+class NapiProjektSubtitle(_NapiProjektSubtitle):
     """NapiProjekt Subtitle."""
     provider_name = 'napiprojekt'
 
