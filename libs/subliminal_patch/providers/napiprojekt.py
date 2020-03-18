@@ -73,7 +73,7 @@ class NapiProjektProvider(_NapiProjektProvider):
 
         return subtitle
 
-    def get_length(filename):
+    def get_length(self, filename):
         result = subprocess.run(["ffprobe", "-v", "error", "-show_entries",
                                  "format=duration", "-of",
                                  "default=noprint_wrappers=1:nokey=1", filename],
@@ -84,7 +84,7 @@ class NapiProjektProvider(_NapiProjektProvider):
     def list_subtitles(self, video, languages):
         season = episode = None
         year=video.year
-        duration = get_length(video.name)
+        duration = self.get_length(video.name)
         if isinstance(video, Episode):
             title = video.series[0]
             season = video.season
