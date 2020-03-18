@@ -149,5 +149,5 @@ class NapiProjektProvider(_NapiProjektProvider):
                     if duration-60 <= floatlength <= duration+60:
                         subtitle = self.subtitle_class(lang, napid, floatlength, downloads)
                         subs.append(subtitle)
-        sortedsubs = sorted(subs, key=lambda subs: abs(subs.duration - duration), reverse=True)
+        sortedsubs = sorted(subs, key=lambda subs: abs(subs.duration - duration))
         return [s for s in [self.query(lang, subsrt) for subsrt in sortedsubs] if s is not None]
