@@ -18,7 +18,7 @@ class NapiProjektSubtitle(_NapiProjektSubtitle):
     provider_name = 'napiprojekt'
 
     def __init__(self, language, hash, duration, downloads):
-        super(NapiProjektSubtitle, self).__init__(language)
+        super(NapiProjektSubtitle, self).__init__(language, hash)
         self.hash = hash
         self.release_info = hash
         self.duration = duration
