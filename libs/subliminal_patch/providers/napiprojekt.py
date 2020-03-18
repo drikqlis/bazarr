@@ -95,7 +95,7 @@ class NapiProjektProvider(_NapiProjektProvider):
             v_type = "movie"
 
         subs = []
-        command = "napi.sh search -k " + v_type + " -y " + year + " '" + title + "'"    
+        command = "napi.sh search -k " + v_type + " -y " + str(year) + " '" + title + "'"    
         p = subprocess.Popen(command, stdout=subprocess.PIPE, shell=True)
         (output, err) = p.communicate()
         ## Wait for date to terminate. Get return returncode ##
