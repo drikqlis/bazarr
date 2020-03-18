@@ -86,12 +86,12 @@ class NapiProjektProvider(_NapiProjektProvider):
         year=video.year
         duration = self.get_length(video.original_path)
         if isinstance(video, Episode):
-            title = video.series[0]
+            title = video.series
             season = video.season
             episode = video.episode
             v_type = "series"
         else:
-            title = video.title[0]
+            title = video.title
             v_type = "movie"
 
         subs = []
