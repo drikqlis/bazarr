@@ -1,7 +1,7 @@
 # coding=utf-8
 from __future__ import absolute_import
 import logging
-
+from subliminal import Episode, Movie
 from subliminal.providers.napiprojekt import NapiProjektProvider as _NapiProjektProvider, \
     NapiProjektSubtitle as _NapiProjektSubtitle, get_subhash
 from subzero.language import Language
