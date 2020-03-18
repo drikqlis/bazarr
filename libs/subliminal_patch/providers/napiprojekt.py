@@ -119,7 +119,10 @@ class NapiProjektProvider(_NapiProjektProvider):
           howmany = len(alinks)
         else:
           howmany = 1
-        lang = languages[0]
+        lang = ""
+        for e in s:
+            lang = e
+            break
         for x in range(1,howmany+1):
             sub_link_loop = sub_link.replace("napisy1,1,1-dla-","napisy" + str(x) + ",1,1-dla-",1)
             #print(sub_link_loop)
