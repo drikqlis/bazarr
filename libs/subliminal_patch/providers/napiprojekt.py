@@ -5,7 +5,7 @@ import logging
 from subliminal.providers.napiprojekt import NapiProjektProvider as _NapiProjektProvider, \
     NapiProjektSubtitle as _NapiProjektSubtitle, get_subhash
 from subzero.language import Language
-
+from ..subtitle import Subtitle
 import subprocess
 import requests
 import time
