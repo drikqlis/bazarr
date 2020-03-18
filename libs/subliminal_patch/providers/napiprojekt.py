@@ -119,6 +119,7 @@ class NapiProjektProvider(_NapiProjektProvider):
           howmany = len(alinks)
         else:
           howmany = 1
+        lang = languages[0]
         for x in range(1,howmany+1):
             sub_link_loop = sub_link.replace("napisy1,1,1-dla-","napisy" + str(x) + ",1,1-dla-",1)
             #print(sub_link_loop)
@@ -141,7 +142,7 @@ class NapiProjektProvider(_NapiProjektProvider):
                 # print("Czas trwania float: " + str(floatlength))
                 # print("Pobrań: " + downloads)
                 if duration-60 <= floatlength <= duration+60:
-                    subtitle = self.subtitle_class("pl", napid, floatlength, downloads)
+                    subtitle = self.subtitle_class(lang, napid, floatlength, downloads)
                     subs.append(subtitle)
         sortedsubs = sorted(subs, key=lambda subs: abs(subs.duration - duration))
-        return [s for s in [self.query("pl", subsrt) for subsrt in sortedsubs] if s is not None]
+        return [s for s in [self.query(lang, subsrt) for subsrt in sortedsubs] if s is not None]
