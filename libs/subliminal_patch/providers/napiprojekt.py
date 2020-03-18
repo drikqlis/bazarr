@@ -84,7 +84,7 @@ class NapiProjektProvider(_NapiProjektProvider):
     def list_subtitles(self, video, languages):
         season = episode = None
         year=video.year
-        duration = self.get_length(video.name)
+        duration = self.get_length(video.original_path)
         if isinstance(video, Episode):
             title = video.series[0]
             season = video.season
