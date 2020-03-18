@@ -84,9 +84,6 @@ class NapiProjektProvider(_NapiProjektProvider):
     def list_subtitles(self, video, languages):
         season = episode = None
         year=video.year
-        logging.debug('BAZARR is using these video object properties: %s', vars(video))
-        logger.debug('testtt' + video.original_path)
-        logger.debug('testtt' + video.name)
         duration = self.get_length(video.original_path)
         if isinstance(video, Episode):
             title = video.series[0]
@@ -113,7 +110,7 @@ class NapiProjektProvider(_NapiProjektProvider):
         sub_link = sub_link.replace("napisy-","napisy1,1,1-dla-",1)
         if v_type == "series":
           sub_link = sub_link + "-s" + str(season).zfill(2) + "e" + str(episode).zfill(2)
-        # print(sub_link)
+        logger.debug ("Checking subs on: " + sub_link)
         page = requests.get(sub_link)
         soup = BeautifulSoup(page.text, 'html.parser')
         slider = soup.find('div', {'class': 'sliderContent _oF'})
@@ -133,22 +130,23 @@ class NapiProjektProvider(_NapiProjektProvider):
             soup = BeautifulSoup(page.text, 'html.parser')
             table = soup.find('tbody')
             #print(slider.prettify())
-            for row in table.findAll(lambda tag: tag.name=='tr'):
-                napid = row.findAll('td')[0].find('a', href=True)['href'].replace("napiprojekt:","")
-                size = row.findAll('td')[1].text
-                fps = row.findAll('td')[2].text
-                length = row.findAll('td')[3].text
-                downloads = row.findAll('td')[6].text
-                # print("ID: " + napid)
-                # print("Rozmiar: " + size)
-                # print("FPS: " + fps)
-                # print("Czas trwania: " + length)
-                lengtharray = length.split(":")
-                floatlength = int(lengtharray[0]) * 3600 + int(lengtharray[1]) * 60 + float(lengtharray[2])
-                # print("Czas trwania float: " + str(floatlength))
-                # print("Pobrań: " + downloads)
-                if duration-60 <= floatlength <= duration+60:
-                    subtitle = self.subtitle_class(lang, napid, floatlength, downloads)
-                    subs.append(subtitle)
+            if table:
+                for row in table.findAll(lambda tag: tag.name=='tr'):
+                    napid = row.findAll('td')[0].find('a', href=True)['href'].replace("napiprojekt:","")
+                    size = row.findAll('td')[1].text
+                    fps = row.findAll('td')[2].text
+                    length = row.findAll('td')[3].text
+                    downloads = row.findAll('td')[6].text
+                    # print("ID: " + napid)
+                    # print("Rozmiar: " + size)
+                    # print("FPS: " + fps)
+                    # print("Czas trwania: " + length)
+                    lengtharray = length.split(":")
+                    floatlength = int(lengtharray[0]) * 3600 + int(lengtharray[1]) * 60 + float(lengtharray[2])
+                    # print("Czas trwania float: " + str(floatlength))
+                    # print("Pobrań: " + downloads)
+                    if duration-60 <= floatlength <= duration+60:
+                        subtitle = self.subtitle_class(lang, napid, floatlength, downloads)
+                        subs.append(subtitle)
         sortedsubs = sorted(subs, key=lambda subs: abs(subs.duration - duration))
         return [s for s in [self.query(lang, subsrt) for subsrt in sortedsubs] if s is not None]
