@@ -84,6 +84,9 @@ class NapiProjektProvider(_NapiProjektProvider):
     def list_subtitles(self, video, languages):
         season = episode = None
         year=video.year
+        logging.debug('BAZARR is using these video object properties: %s', vars(video))
+        logger.debug('testtt' + video.original_path)
+        logger.debug('testtt' + video.name)
         duration = self.get_length(video.original_path)
         if isinstance(video, Episode):
             title = video.series[0]
