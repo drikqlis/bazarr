@@ -48,29 +48,8 @@ class NapiProjektProvider(_NapiProjektProvider):
     subtitle_class = NapiProjektSubtitle
 
     def query(self, language, subq):
-        hash = subq.hash
-        params = {
-            'v': 'dreambox',
-            'kolejka': 'false',
-            'nick': '',
-            'pass': '',
-            'napios': 'Linux',
-            'l': language.alpha2.upper(),
-            'f': hash,
-            't': get_subhash(hash)}
-        logger.info('Searching subtitle %r', params)
-        r = self.session.get(self.server_url, params=params, timeout=10)
-        r.raise_for_status()
-
-        # handle subtitles not found and errors
-        if r.content[:4] == b'NPc0':
-            logger.debug('No subtitles found')
-            return None
-
         subtitle = subq
-        subtitle.content = r.content
         logger.debug('Found subtitle %r', subtitle)
-
         return subtitle
 
     def get_length(self, filename):
@@ -151,3 +130,28 @@ class NapiProjektProvider(_NapiProjektProvider):
                         subs.append(subtitle)
         sortedsubs = sorted(subs, key=lambda subs: abs(subs.duration - duration))
         return [s for s in [self.query(lang, subsrt) for subsrt in sortedsubs] if s is not None]
+
+        def download_subtitle(self, subtitle):
+            hash = subtitle.hash
+            params = {
+                'v': 'dreambox',
+                'kolejka': 'false',
+                'nick': '',
+                'pass': '',
+                'napios': 'Linux',
+                'l': "PL",
+                'f': hash,
+                't': get_subhash(hash)}
+            logger.info('Searching subtitle %r', params)
+            r = self.session.get(self.server_url, params=params, timeout=10)
+            r.raise_for_status()
+
+            # handle subtitles not found and errors
+            if r.content[:4] == b'NPc0':
+                logger.debug('No subtitles found')
+                return None
+
+            subtitle2 = subtitle
+            subtitle2.content = r.content
+            logger.debug('Found subtitle %r', subtitle2)
+            return subtitle2
