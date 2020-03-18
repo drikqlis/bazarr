@@ -120,7 +120,7 @@ class NapiProjektProvider(_NapiProjektProvider):
         else:
           howmany = 1
         lang = ""
-        for e in s:
+        for e in languages:
             lang = e
             break
         for x in range(1,howmany+1):
