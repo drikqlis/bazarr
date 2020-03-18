@@ -144,4 +144,4 @@ class NapiProjektProvider(_NapiProjektProvider):
                     subtitle = self.subtitle_class("pl", napid, floatlength, downloads)
                     subs.append(subtitle)
         sortedsubs = sorted(subs, key=lambda subs: abs(subs.duration - duration))
-        return [s for s in [self.query(languages[0], subsrt) for subsrt in sortedsubs] if s is not None]
+        return [s for s in [self.query("pl", subsrt) for subsrt in sortedsubs] if s is not None]
