@@ -106,5 +106,25 @@ class NapiProjektProvider(Provider):
         return [s for s in [self.query(l, video.hashes['napiprojekt']) for l in languages] if s is not None]
 
     def download_subtitle(self, subtitle):
-        # there is no download step, content is already filled from listing subtitles
-        pass
+        hash = subtitle.hash
+        params = {
+            'v': 'dreambox',
+            'kolejka': 'false',
+            'nick': '',
+            'pass': '',
+            'napios': 'Linux',
+            'l': "PL",
+            'f': hash,
+            't': get_subhash(hash)}
+        logger.info('Searching subtitle %r', params)
+        r = self.session.get(self.server_url, params=params, timeout=10)
+        r.raise_for_status()
+
+        # handle subtitles not found and errors
+        if r.content[:4] == b'NPc0':
+            logger.debug('No subtitles downloaded')
+            return None
+
+        subtitle2 = subtitle
+        subtitle2.content = r.content
+        logger.debug('Downloaded subtitle %r', subtitle2)

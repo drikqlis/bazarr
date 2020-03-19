@@ -151,9 +151,7 @@ class NapiProjektProvider(_NapiProjektProvider):
             # handle subtitles not found and errors
             if r.content[:4] == b'NPc0':
                 logger.debug('No subtitles downloaded')
-                return None
 
             subtitle2 = subtitle
             subtitle2.content = r.content
             logger.debug('Downloaded subtitle %r', subtitle2)
-            return subtitle2
