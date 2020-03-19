@@ -76,62 +76,62 @@ class NapiProjektProvider(_NapiProjektProvider):
             v_type = "movie"
 
         subs = []
-        command = "napi.sh search -k " + v_type + " -y " + str(year) + " '" + title + "'"    
-        logger.debug("Running command: " + command)
-        p = subprocess.Popen(command, stdout=subprocess.PIPE, shell=True)
-        (output, err) = p.communicate()
-        ## Wait for date to terminate. Get return returncode ##
-        p_status = p.wait()
 
-        output = output.decode('utf-8')
-        output_list = output.splitlines()
-        movie_line_number = [i for i, s in enumerate(output_list) if 'Wyszukuje tytul:' in s][0] + 1
-        movie_line = output_list[movie_line_number]
-        sub_link = movie_line.split('|')[2].strip()
-
-        sub_link = sub_link.replace("napisy-","napisy1,1,1-dla-",1)
-        if v_type == "series":
-          sub_link = sub_link + "-s" + str(season).zfill(2) + "e" + str(episode).zfill(2)
-        logger.debug ("Checking subs on: " + sub_link)
-        page = requests.get(sub_link)
-        soup = BeautifulSoup(page.text, 'html.parser')
-        slider = soup.find('div', {'class': 'sliderContent _oF'})
-        if slider:
-          alinks = slider.findAll('a')
-          howmany = len(alinks)
-        else:
-          howmany = 1
-        lang = ""
-        for e in languages:
-            lang = e
-            break
-        for x in range(1,howmany+1):
-            sub_link_loop = sub_link.replace("napisy1,1,1-dla-","napisy" + str(x) + ",1,1-dla-",1)
-            #print(sub_link_loop)
-            page = requests.get(sub_link_loop)
+        url = 'https://www.napiprojekt.pl/ajax/search_catalog.php'
+        req = {'queryString': title, '&queryKind': v_type, '&queryYear': year, '&associate': ''}
+        searchsub = requests.post(url, data = req)
+        soup2 = BeautifulSoup(searchsub.text, 'html.parser')
+        result = soup2.find('a', {'class': 'movieTitleCat'})
+        if result:
+            sub_link = "https://www.napiprojekt.pl/" + result['href']   
+            sub_link = sub_link.replace("napisy-","napisy1,1,1-dla-",1)
+            if v_type == "series":
+              sub_link = sub_link + "-s" + str(season).zfill(2) + "e" + str(episode).zfill(2)
+            logger.debug ("Checking subs on: " + sub_link)
+            page = requests.get(sub_link)
             soup = BeautifulSoup(page.text, 'html.parser')
-            table = soup.find('tbody')
-            #print(slider.prettify())
-            if table:
-                for row in table.findAll(lambda tag: tag.name=='tr'):
-                    napid = row.findAll('td')[0].find('a', href=True)['href'].replace("napiprojekt:","")
-                    size = row.findAll('td')[1].text
-                    fps = row.findAll('td')[2].text
-                    length = row.findAll('td')[3].text
-                    downloads = row.findAll('td')[6].text
-                    # print("ID: " + napid)
-                    # print("Rozmiar: " + size)
-                    # print("FPS: " + fps)
-                    # print("Czas trwania: " + length)
-                    lengtharray = length.split(":")
-                    floatlength = int(lengtharray[0]) * 3600 + int(lengtharray[1]) * 60 + float(lengtharray[2])
-                    # print("Czas trwania float: " + str(floatlength))
-                    # print("Pobrań: " + downloads)
-                    if duration-60 <= floatlength <= duration+60:
-                        subtitle = self.subtitle_class(lang, napid, floatlength, downloads)
-                        subs.append(subtitle)
-        sortedsubs = sorted(subs, key=lambda subs: abs(subs.duration - duration))
-        return [s for s in [self.query(lang, subsrt) for subsrt in sortedsubs] if s is not None]
+            slider = soup.find('div', {'class': 'sliderContent _oF'})
+            if slider:
+              alinks = slider.findAll('a')
+              howmany = len(alinks)
+            else:
+              howmany = 1
+            lang = ""
+            for e in languages:
+                lang = e
+                break
+            for x in range(1,howmany+1):
+                sub_link_loop = sub_link.replace("napisy1,1,1-dla-","napisy" + str(x) + ",1,1-dla-",1)
+                #print(sub_link_loop)
+                page = requests.get(sub_link_loop)
+                soup = BeautifulSoup(page.text, 'html.parser')
+                table = soup.find('tbody')
+                #print(slider.prettify())
+                if table:
+                    for row in table.findAll(lambda tag: tag.name=='tr'):
+                        napid = row.findAll('td')[0].find('a', href=True)['href'].replace("napiprojekt:","")
+                        size = row.findAll('td')[1].text
+                        fps = row.findAll('td')[2].text
+                        length = row.findAll('td')[3].text
+                        downloads = row.findAll('td')[6].text
+                        # print("ID: " + napid)
+                        # print("Rozmiar: " + size)
+                        # print("FPS: " + fps)
+                        # print("Czas trwania: " + length)
+                        if length == "":
+                          floatlength = 0
+                        else:
+                          lengtharray = length.split(":")
+                          floatlength = int(lengtharray[0]) * 3600 + int(lengtharray[1]) * 60 + float(lengtharray[2])
+                        # print("Czas trwania float: " + str(floatlength))
+                        # print("Pobrań: " + downloads)
+                        if duration-60 <= floatlength <= duration+60:
+                            subtitle = self.subtitle_class(lang, napid, floatlength, downloads)
+                            subs.append(subtitle)
+            sortedsubs = sorted(subs, key=lambda subs: abs(subs.duration - duration))
+            return [s for s in [self.query(lang, subsrt) for subsrt in sortedsubs] if s is not None]
+        else:
+            return None
 
         def download_subtitle(self, subtitle):
             hash = subtitle.hash
