@@ -46,6 +46,8 @@ class NapiProjektSubtitle(_NapiProjektSubtitle):
 class NapiProjektProvider(_NapiProjektProvider):
     languages = {Language.fromalpha2(l) for l in ['pl']}
     subtitle_class = NapiProjektSubtitle
+    required_hash = 'napiprojekt'
+    server_url = 'http://napiprojekt.pl/unit_napisy/dl.php'
 
     def query(self, language, subq):
         subtitle = subq
@@ -148,10 +150,10 @@ class NapiProjektProvider(_NapiProjektProvider):
 
             # handle subtitles not found and errors
             if r.content[:4] == b'NPc0':
-                logger.debug('No subtitles found')
+                logger.debug('No subtitles downloaded')
                 return None
 
             subtitle2 = subtitle
             subtitle2.content = r.content
-            logger.debug('Found subtitle %r', subtitle2)
+            logger.debug('Downloaded subtitle %r', subtitle2)
             return subtitle2
