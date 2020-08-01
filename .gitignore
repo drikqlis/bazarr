@@ -9,6 +9,9 @@ bazarr.pid
 /venv
 /data
 /.vs
-
+static/scss/.sass-cache/*
+static/scss/.sass-cache
+*.scssc
+/.vscode
 # Allow
 !*.dll

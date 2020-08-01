@@ -1,5 +1,4 @@
 # coding=utf-8
-from __future__ import absolute_import
 import ast
 import os
 import re
@@ -11,91 +10,92 @@ from bs4 import UnicodeDammit
 from config import settings
 
 
-def create_path_mapping_dict():
-    global path_mapping_series
-    path_mapping_series = ast.literal_eval(settings.general.path_mappings)
+class PathMappings:
+    def __init__(self):
+        self.path_mapping_series = []
+        self.path_mapping_movies = []
 
-    global path_mapping_movies
-    path_mapping_movies = ast.literal_eval(settings.general.path_mappings_movie)
+    def update(self):
+        self.path_mapping_series = ast.literal_eval(settings.general.path_mappings)
+        self.path_mapping_movies = ast.literal_eval(settings.general.path_mappings_movie)
 
+    def path_replace(self, path):
+        if path is None:
+            return None
 
-def path_replace(path):
-    if path is None:
-        return None
+        for path_mapping in self.path_mapping_series:
+            if path_mapping[0] == path_mapping[1]:
+                continue
+            if '' in path_mapping:
+                continue
+            if path_mapping[0] in path:
+                path = path.replace(path_mapping[0], path_mapping[1])
+                if path.startswith('\\\\') or re.match(r'^[a-zA-Z]:\\', path):
+                    path = path.replace('/', '\\')
+                elif path.startswith('/'):
+                    path = path.replace('\\', '/')
+                break
+        return path
 
-    for path_mapping in path_mapping_series:
-        if path_mapping[0] == path_mapping[1]:
-            continue
-        if '' in path_mapping:
-            continue
-        if path_mapping[0] in path:
-            path = path.replace(path_mapping[0], path_mapping[1])
-            if path.startswith('\\\\') or re.match(r'^[a-zA-Z]:\\', path):
-                path = path.replace('/', '\\')
-            elif path.startswith('/'):
-                path = path.replace('\\', '/')
-            break
-    return path
+    def path_replace_reverse(self, path):
+        if path is None:
+            return None
 
+        for path_mapping in self.path_mapping_series:
+            if path_mapping[0] == path_mapping[1]:
+                continue
+            if '' in path_mapping:
+                continue
+            if path_mapping[1] in path:
+                path = path.replace(path_mapping[1], path_mapping[0])
+                if path.startswith('\\\\') or re.match(r'^[a-zA-Z]:\\', path):
+                    path = path.replace('/', '\\')
+                elif path.startswith('/'):
+                    path = path.replace('\\', '/')
+                break
+        return path
 
-def path_replace_reverse(path):
-    if path is None:
-        return None
+    def path_replace_movie(self, path):
+        if path is None:
+            return None
 
-    for path_mapping in path_mapping_series:
-        if path_mapping[0] == path_mapping[1]:
-            continue
-        if '' in path_mapping:
-            continue
-        if path_mapping[1] in path:
-            path = path.replace(path_mapping[1], path_mapping[0])
-            if path.startswith('\\\\') or re.match(r'^[a-zA-Z]:\\', path):
-                path = path.replace('/', '\\')
-            elif path.startswith('/'):
-                path = path.replace('\\', '/')
-            break
-    return path
+        for path_mapping in self.path_mapping_movies:
+            if path_mapping[0] == path_mapping[1]:
+                continue
+            if '' in path_mapping:
+                continue
+            if path_mapping[0] in path:
+                path = path.replace(path_mapping[0], path_mapping[1])
+                if path.startswith('\\\\') or re.match(r'^[a-zA-Z]:\\', path):
+                    path = path.replace('/', '\\')
+                elif path.startswith('/'):
+                    path = path.replace('\\', '/')
+                break
+        return path
 
+    def path_replace_reverse_movie(self, path):
+        if path is None:
+            return None
 
-def path_replace_movie(path):
-    if path is None:
-        return None
-
-    for path_mapping in path_mapping_movies:
-        if path_mapping[0] == path_mapping[1]:
-            continue
-        if '' in path_mapping:
-            continue
-        if path_mapping[0] in path:
-            path = path.replace(path_mapping[0], path_mapping[1])
-            if path.startswith('\\\\') or re.match(r'^[a-zA-Z]:\\', path):
-                path = path.replace('/', '\\')
-            elif path.startswith('/'):
-                path = path.replace('\\', '/')
-            break
-    return path
-
-
-def path_replace_reverse_movie(path):
-    if path is None:
-        return None
-
-    for path_mapping in path_mapping_movies:
-        if path_mapping[0] == path_mapping[1]:
-            continue
-        if '' in path_mapping:
-            continue
-        if path_mapping[1] in path:
-            path = path.replace(path_mapping[1], path_mapping[0])
-            if path.startswith('\\\\') or re.match(r'^[a-zA-Z]:\\', path):
-                path = path.replace('/', '\\')
-            elif path.startswith('/'):
-                path = path.replace('\\', '/')
-            break
-    return path
+        for path_mapping in self.path_mapping_movies:
+            if path_mapping[0] == path_mapping[1]:
+                continue
+            if '' in path_mapping:
+                continue
+            if path_mapping[1] in path:
+                path = path.replace(path_mapping[1], path_mapping[0])
+                if path.startswith('\\\\') or re.match(r'^[a-zA-Z]:\\', path):
+                    path = path.replace('/', '\\')
+                elif path.startswith('/'):
+                    path = path.replace('\\', '/')
+                break
+        return path
 
 
-def pp_replace(pp_command, episode, subtitles, language, language_code2, language_code3, forced):
+path_mappings = PathMappings()
+
+
+def pp_replace(pp_command, episode, subtitles, language, language_code2, language_code3, episode_language, episode_language_code2, episode_language_code3, forced, score):
     is_forced = ":forced" if forced else ""
     is_forced_string = " forced" if forced else ""
     pp_command = pp_command.replace('{{directory}}', os.path.dirname(episode))
@@ -105,6 +105,10 @@ def pp_replace(pp_command, episode, subtitles, language, language_code2, languag
     pp_command = pp_command.replace('{{subtitles_language}}', language + is_forced_string)
     pp_command = pp_command.replace('{{subtitles_language_code2}}', language_code2 + is_forced)
     pp_command = pp_command.replace('{{subtitles_language_code3}}', language_code3 + is_forced)
+    pp_command = pp_command.replace('{{episode_language}}', episode_language)
+    pp_command = pp_command.replace('{{episode_language_code2}}', episode_language_code2)
+    pp_command = pp_command.replace('{{episode_language_code3}}', episode_language_code3)
+    pp_command = pp_command.replace('{{score}}', str(score))
     return pp_command
 
 

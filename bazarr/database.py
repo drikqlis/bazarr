@@ -1,18 +1,16 @@
 import os
+import ast
+import sqlite3
+import logging
+
 from sqlite3worker import Sqlite3Worker
-from six import string_types
 
 from get_args import args
-from helper import path_replace, path_replace_movie, path_replace_reverse, path_replace_reverse_movie
+from helper import path_mappings
+from config import settings
 
 
 def db_init():
-    import sqlite3
-    import os
-    import logging
-
-    from get_args import args
-
     if not os.path.exists(os.path.join(args.config_dir, 'db', 'bazarr.db')):
         # Get SQL script from file
         fd = open(os.path.join(os.path.dirname(__file__), 'create_db.sql'), 'r')
@@ -70,20 +68,20 @@ class SqliteDictPathMapper:
     def path_replace(self, values_dict):
         if type(values_dict) is list:
             for item in values_dict:
-                item['path'] = path_replace(item['path'])
+                item['path'] = path_mappings.path_replace(item['path'])
         elif type(values_dict) is dict:
-            values_dict['path'] = path_replace(values_dict['path'])
+            values_dict['path'] = path_mappings.path_replace(values_dict['path'])
         else:
-            return path_replace(values_dict)
+            return path_mappings.path_replace(values_dict)
 
     def path_replace_movie(self, values_dict):
         if type(values_dict) is list:
             for item in values_dict:
-                item['path'] = path_replace_movie(item['path'])
+                item['path'] = path_mappings.path_replace_movie(item['path'])
         elif type(values_dict) is dict:
-            values_dict['path'] = path_replace_movie(values_dict['path'])
+            values_dict['path'] = path_mappings.path_replace_movie(values_dict['path'])
         else:
-            return path_replace(values_dict)
+            return path_mappings.path_replace_movie(values_dict)
 
 
 dict_mapper = SqliteDictPathMapper()
@@ -94,6 +92,8 @@ def db_upgrade():
         ['table_shows', 'year', 'text'],
         ['table_shows', 'alternateTitles', 'text'],
         ['table_shows', 'forced', 'text', 'False'],
+        ['table_shows', 'tags', 'text', '[]'],
+        ['table_shows', 'seriesType', 'text', ''],
         ['table_episodes', 'format', 'text'],
         ['table_episodes', 'resolution', 'text'],
         ['table_episodes', 'video_codec', 'text'],
@@ -109,14 +109,19 @@ def db_upgrade():
         ['table_movies', 'imdbId', 'text'],
         ['table_movies', 'forced', 'text', 'False'],
         ['table_movies', 'movie_file_id', 'integer'],
+        ['table_movies', 'tags', 'text', '[]'],
         ['table_history', 'video_path', 'text'],
         ['table_history', 'language', 'text'],
         ['table_history', 'provider', 'text'],
         ['table_history', 'score', 'text'],
+        ['table_history', 'subs_id', 'text'],
+        ['table_history', 'subtitles_path', 'text'],
         ['table_history_movie', 'video_path', 'text'],
         ['table_history_movie', 'language', 'text'],
         ['table_history_movie', 'provider', 'text'],
-        ['table_history_movie', 'score', 'text']
+        ['table_history_movie', 'score', 'text'],
+        ['table_history_movie', 'subs_id', 'text'],
+        ['table_history_movie', 'subtitles_path', 'text']
     ]
 
     for column in columnToAdd:
@@ -127,3 +132,44 @@ def db_upgrade():
                 database.execute('''ALTER TABLE {0} ADD COLUMN "{1}" "{2}" DEFAULT "{3}"'''.format(column[0], column[1], column[2], column[3]))
         except:
             pass
+
+    # Fix null languages, hearing-impaired and forced for series and movies.
+    database.execute("UPDATE table_shows SET languages = '[]' WHERE languages is null")
+    database.execute("UPDATE table_shows SET hearing_impaired = 'False' WHERE hearing_impaired is null")
+    database.execute("UPDATE table_shows SET forced = 'False' WHERE forced is null")
+    database.execute("UPDATE table_movies SET languages = '[]' WHERE languages is null")
+    database.execute("UPDATE table_movies SET hearing_impaired = 'False' WHERE hearing_impaired is null")
+    database.execute("UPDATE table_movies SET forced = 'False' WHERE forced is null")
+
+    # Create blacklist tables
+    database.execute("CREATE TABLE IF NOT EXISTS table_blacklist (sonarr_series_id integer, sonarr_episode_id integer, "
+                     "timestamp integer, provider text, subs_id text, language text)")
+    database.execute("CREATE TABLE IF NOT EXISTS table_blacklist_movie (radarr_id integer, timestamp integer, "
+                     "provider text, subs_id text, language text)")
+
+
+def filter_exclusions(dicts_list, type):
+    if type == 'series':
+        tagsList = ast.literal_eval(settings.sonarr.excluded_tags)
+        monitoredOnly = settings.sonarr.getboolean('only_monitored')
+    else:
+        tagsList = ast.literal_eval(settings.radarr.excluded_tags)
+        monitoredOnly = settings.radarr.getboolean('only_monitored')
+
+    # Filter tags
+    dictsList_tags_filtered = [item for item in dicts_list if set(tagsList).isdisjoint(ast.literal_eval(item['tags']))]
+
+    # Filter monitored
+    if monitoredOnly:
+        dictsList_monitored_filtered = [item for item in dictsList_tags_filtered if item['monitored'] == 'True']
+    else:
+        dictsList_monitored_filtered = dictsList_tags_filtered
+
+    # Filter series type
+    if type == 'series':
+        dictsList_types_filtered = [item for item in dictsList_monitored_filtered if item['seriesType'] not in
+                                    ast.literal_eval(settings.sonarr.excluded_series_types)]
+    else:
+        dictsList_types_filtered = dictsList_monitored_filtered
+
+    return dictsList_types_filtered

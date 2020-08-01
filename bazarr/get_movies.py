@@ -1,15 +1,11 @@
 # coding=utf-8
 
-from __future__ import absolute_import
 import os
-import six
 import requests
 import logging
-from queueconfig import notifications
 
-from get_args import args
 from config import settings, url_radarr
-from helper import path_replace_movie
+from helper import path_mappings
 from utils import get_radarr_version
 from list_subtitles import store_subtitles_movie, list_missing_subtitles_movies, movies_full_scan_subtitles
 
@@ -25,15 +21,24 @@ def update_all_movies():
 def update_movies():
     logging.debug('BAZARR Starting movie sync from Radarr.')
     apikey_radarr = settings.radarr.apikey
+
+    radarr_version = get_radarr_version()
     movie_default_enabled = settings.general.getboolean('movie_default_enabled')
-    movie_default_language = settings.general.movie_default_language
-    movie_default_hi = settings.general.movie_default_hi
-    movie_default_forced = settings.general.movie_default_forced
-    
+
+    if movie_default_enabled is True:
+        movie_default_language = settings.general.movie_default_language
+        movie_default_hi = settings.general.movie_default_hi
+        movie_default_forced = settings.general.movie_default_forced
+    else:
+        movie_default_language = '[]'
+        movie_default_hi = 'False'
+        movie_default_forced = 'False'
+
     if apikey_radarr is None:
         pass
     else:
         audio_profiles = get_profile_list()
+        tagsDict = get_tags()
         
         # Get movies data from radarr
         url_radarr_api_movies = url_radarr() + "/api/movie?apikey=" + apikey_radarr
@@ -65,8 +70,6 @@ def update_movies():
 
             moviesIdListLength = len(r.json())
             for i, movie in enumerate(r.json(), 1):
-                notifications.write(msg="Getting movies data from Radarr...", queue='get_movies', item=i,
-                                    length=moviesIdListLength)
                 if movie['hasFile'] is True:
                     if 'movieFile' in movie:
                         # Detect file separator
@@ -77,7 +80,7 @@ def update_movies():
 
                         if movie["path"] != None and movie['movieFile']['relativePath'] != None:
                             try:
-                                overview = six.text_type(movie['overview'])
+                                overview = str(movie['overview'])
                             except:
                                 overview = ""
                             try:
@@ -107,10 +110,10 @@ def update_movies():
                                 format, resolution = movie['movieFile']['quality']['quality']['name'].split('-')
                             except:
                                 format = movie['movieFile']['quality']['quality']['name']
-                            try:
-                                resolution = movie['movieFile']['quality']['quality']['resolution'].lstrip('r').lower()
-                            except:
-                                resolution = None
+                                try:
+                                    resolution = str(movie['movieFile']['quality']['quality']['resolution']) + 'p'
+                                except:
+                                    resolution = None
 
                             if 'mediaInfo' in movie['movieFile']:
                                 videoFormat = videoCodecID = videoProfile = videoCodecLibrary = None
@@ -130,78 +133,59 @@ def update_movies():
                                 videoCodec = None
                                 audioCodec = None
 
+                            audio_language = profile_id_to_language(movie['qualityProfileId'], audio_profiles)
+
+                            tags = [d['label'] for d in tagsDict if d['id'] in movie['tags']]
+
                             # Add movies in radarr to current movies list
-                            current_movies_radarr.append(six.text_type(movie['tmdbId']))
+                            current_movies_radarr.append(str(movie['tmdbId']))
                             
-                            if six.text_type(movie['tmdbId']) in current_movies_db_list:
-                                movies_to_update.append({'radarrId': movie["id"],
-                                                         'title': six.text_type(movie["title"]),
-                                                         'path': six.text_type(movie["path"] + separator + movie['movieFile']['relativePath']),
-                                                         'tmdbId': six.text_type(movie["tmdbId"]),
-                                                         'poster': six.text_type(poster),
-                                                         'fanart': six.text_type(fanart),
-                                                         'audio_language': six.text_type(profile_id_to_language(movie['qualityProfileId'], audio_profiles)),
+                            if str(movie['tmdbId']) in current_movies_db_list:
+                                movies_to_update.append({'radarrId': int(movie["id"]),
+                                                         'title': movie["title"],
+                                                         'path': movie["path"] + separator + movie['movieFile']['relativePath'],
+                                                         'tmdbId': str(movie["tmdbId"]),
+                                                         'poster': poster,
+                                                         'fanart': fanart,
+                                                         'audio_language': audio_language,
                                                          'sceneName': sceneName,
-                                                         'monitored': six.text_type(bool(movie['monitored'])),
-                                                         'year': six.text_type(movie['year']),
-                                                         'sortTitle': six.text_type(movie['sortTitle']),
-                                                         'alternativeTitles': six.text_type(alternativeTitles),
-                                                         'format': six.text_type(format),
-                                                         'resolution': six.text_type(resolution),
-                                                         'video_codec': six.text_type(videoCodec),
-                                                         'audio_codec': six.text_type(audioCodec),
-                                                         'overview': six.text_type(overview),
-                                                         'imdbId': six.text_type(imdbId),
-                                                         'movie_file_id': movie['movieFile']['id']})
+                                                         'monitored': str(bool(movie['monitored'])),
+                                                         'year': str(movie['year']),
+                                                         'sortTitle': movie['sortTitle'],
+                                                         'alternativeTitles': alternativeTitles,
+                                                         'format': format,
+                                                         'resolution': resolution,
+                                                         'video_codec': videoCodec,
+                                                         'audio_codec': audioCodec,
+                                                         'overview': overview,
+                                                         'imdbId': imdbId,
+                                                         'movie_file_id': int(movie['movieFile']['id']),
+                                                         'tags': str(tags)})
                             else:
-                                if movie_default_enabled is True:
-                                    movies_to_add.append({'radarrId': movie["id"],
-                                                          'title': movie["title"],
-                                                          'path': movie["path"] + separator + movie['movieFile']['relativePath'],
-                                                          'tmdbId': movie["tmdbId"],
-                                                          'languages': movie_default_language,
-                                                          'subtitles': '[]',
-                                                          'hearing_impaired': movie_default_hi,
-                                                          'overview': overview,
-                                                          'poster': poster,
-                                                          'fanart': fanart,
-                                                          'audio_language': profile_id_to_language(movie['qualityProfileId'], audio_profiles),
-                                                          'sceneName': sceneName,
-                                                          'monitored': six.text_type(bool(movie['monitored'])),
-                                                          'sortTitle': movie['sortTitle'],
-                                                          'year': movie['year'],
-                                                          'alternativeTitles': alternativeTitles,
-                                                          'format': format,
-                                                          'resolution': resolution,
-                                                          'video_codec': videoCodec,
-                                                          'audio_codec': audioCodec,
-                                                          'imdbId': imdbId,
-                                                          'forced': movie_default_forced,
-                                                          'movie_file_id': movie['movieFile']['id']})
-                                else:
-                                    movies_to_add.append({'radarrId': movie["id"],
-                                                          'title': movie["title"],
-                                                          'path': movie["path"] + separator + movie['movieFile']['relativePath'],
-                                                          'tmdbId': movie["tmdbId"],
-                                                          'languages': None,
-                                                          'subtitles': '[]',
-                                                          'hearing_impaired': None,
-                                                          'overview': overview,
-                                                          'poster': poster,
-                                                          'fanart': fanart,
-                                                          'audio_language': profile_id_to_language(movie['qualityProfileId'], audio_profiles),
-                                                          'sceneName': sceneName,
-                                                          'monitored': six.text_type(bool(movie['monitored'])),
-                                                          'sortTitle': movie['sortTitle'],
-                                                          'year': movie['year'],
-                                                          'alternativeTitles': alternativeTitles,
-                                                          'format': format,
-                                                          'resolution': resolution,
-                                                          'video_codec': videoCodec,
-                                                          'audio_codec': audioCodec,
-                                                          'imdbId': imdbId,
-                                                          'forced': None,
-                                                          'movie_file_id': movie['movieFile']['id']})
+                                movies_to_add.append({'radarrId': int(movie["id"]),
+                                                      'title': movie["title"],
+                                                      'path': movie["path"] + separator + movie['movieFile']['relativePath'],
+                                                      'tmdbId': str(movie["tmdbId"]),
+                                                      'languages': movie_default_language,
+                                                      'subtitles': '[]',
+                                                      'hearing_impaired': movie_default_hi,
+                                                      'overview': overview,
+                                                      'poster': poster,
+                                                      'fanart': fanart,
+                                                      'audio_language': audio_language,
+                                                      'sceneName': sceneName,
+                                                      'monitored': str(bool(movie['monitored'])),
+                                                      'sortTitle': movie['sortTitle'],
+                                                      'year': str(movie['year']),
+                                                      'alternativeTitles': alternativeTitles,
+                                                      'format': format,
+                                                      'resolution': resolution,
+                                                      'video_codec': videoCodec,
+                                                      'audio_codec': audioCodec,
+                                                      'imdbId': imdbId,
+                                                      'forced': movie_default_forced,
+                                                      'movie_file_id': int(movie['movieFile']['id']),
+                                                      'tags': str(tags)})
                         else:
                             logging.error(
                                 'BAZARR Radarr returned a movie without a file path: ' + movie["path"] + separator +
@@ -218,7 +202,7 @@ def update_movies():
             movies_in_db = database.execute("SELECT radarrId, title, path, tmdbId, overview, poster, fanart, "
                                             "audio_language, sceneName, monitored, sortTitle, year, "
                                             "alternativeTitles, format, resolution, video_codec, audio_codec, imdbId,"
-                                            "movie_file_id FROM table_movies")
+                                            "movie_file_id, tags FROM table_movies")
 
             for item in movies_in_db:
                 movies_in_db_list.append(item)
@@ -227,8 +211,8 @@ def update_movies():
 
             for updated_movie in movies_to_update_list:
                 query = dict_converter.convert(updated_movie)
-                database.execute('''UPDATE table_movies SET ''' + query.keys_update + ''' WHERE radarrId = ?''',
-                                 query.values + (updated_movie['radarrId'],))
+                database.execute('''UPDATE table_movies SET ''' + query.keys_update + ''' WHERE tmdbId = ?''',
+                                 query.values + (updated_movie['tmdbId'],))
                 altered_movies.append([updated_movie['tmdbId'],
                                        updated_movie['path'],
                                        updated_movie['radarrId'],
@@ -247,13 +231,11 @@ def update_movies():
                                            added_movie['monitored']])
                 else:
                     logging.debug('BAZARR unable to insert this movie into the database:',
-                                  path_replace_movie(added_movie['path']))
+                                  path_mappings.path_replace_movie(added_movie['path']))
 
             # Store subtitles for added or modified movies
             for i, altered_movie in enumerate(altered_movies, 1):
-                notifications.write(msg='Indexing movies embedded subtitles...', queue='get_movies', item=i,
-                                    length=len(altered_movies))
-                store_subtitles_movie(altered_movie[1], path_replace_movie(altered_movie[1]))
+                store_subtitles_movie(altered_movie[1], path_mappings.path_replace_movie(altered_movie[1]))
 
             logging.debug('BAZARR All movies synced from Radarr into database.')
 
@@ -275,8 +257,11 @@ def get_profile_list():
     radarr_version = get_radarr_version()
     profiles_list = []
     # Get profiles data from radarr
+    if radarr_version.startswith('0'):
+        url_radarr_api_movies = url_radarr() + "/api/profile?apikey=" + apikey_radarr
+    else:
+        url_radarr_api_movies = url_radarr() + "/api/v3/qualityprofile?apikey=" + apikey_radarr
 
-    url_radarr_api_movies = url_radarr() + "/api/profile?apikey=" + apikey_radarr
     try:
         profiles_json = requests.get(url_radarr_api_movies, timeout=60, verify=False)
     except requests.exceptions.ConnectionError as errc:
@@ -290,7 +275,7 @@ def get_profile_list():
         if radarr_version.startswith('0'):
             for profile in profiles_json.json():
                 profiles_list.append([profile['id'], profile['language'].capitalize()])
-        elif radarr_version.startswith('2'):
+        else:
             for profile in profiles_json.json():
                 profiles_list.append([profile['id'], profile['language']['name'].capitalize()])
 
@@ -351,5 +336,23 @@ def RadarrFormatVideoCodec(videoFormat, videoCodecID, videoProfile, videoCodecLi
     return videoFormat
 
 
-if __name__ == '__main__':
-    update_movies()
+def get_tags():
+    apikey_radarr = settings.radarr.apikey
+    tagsDict = []
+
+    # Get tags data from Sonarr
+    url_sonarr_api_series = url_radarr() + "/api/tag?apikey=" + apikey_radarr
+
+    try:
+        tagsDict = requests.get(url_sonarr_api_series, timeout=60, verify=False)
+    except requests.exceptions.ConnectionError:
+        logging.exception("BAZARR Error trying to get tags from Radarr. Connection Error.")
+        return []
+    except requests.exceptions.Timeout:
+        logging.exception("BAZARR Error trying to get tags from Radarr. Timeout Error.")
+        return []
+    except requests.exceptions.RequestException:
+        logging.exception("BAZARR Error trying to get tags from Radarr.")
+        return []
+    else:
+        return tagsDict.json()

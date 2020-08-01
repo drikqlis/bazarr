@@ -32,7 +32,11 @@ from subliminal.core import guessit, ProviderPool, io, is_windows_special_path, 
 from subliminal_patch.exceptions import TooManyRequests, APIThrottled
 
 from subzero.language import Language, ENDSWITH_LANGUAGECODE_RE, FULL_LANGUAGE_LIST
-from scandir import scandir, scandir_generic as _scandir_generic
+try:
+    from os import scandir
+    _scandir_generic = scandir
+except ImportError:
+    from scandir import scandir, scandir_generic as _scandir_generic
 import six
 
 logger = logging.getLogger(__name__)
@@ -356,15 +360,16 @@ class SZProviderPool(ProviderPool):
             orig_matches = matches.copy()
 
             logger.debug('%r: Found matches %r', s, matches)
+            score, score_without_hash = compute_score(matches, s, video, hearing_impaired=use_hearing_impaired)
             unsorted_subtitles.append(
-                (s, compute_score(matches, s, video, hearing_impaired=use_hearing_impaired), matches, orig_matches))
+                (s, score, score_without_hash, matches, orig_matches))
 
         # sort subtitles by score
-        scored_subtitles = sorted(unsorted_subtitles, key=operator.itemgetter(1), reverse=True)
+        scored_subtitles = sorted(unsorted_subtitles, key=operator.itemgetter(1, 2), reverse=True)
 
         # download best subtitles, falling back on the next on error
         downloaded_subtitles = []
-        for subtitle, score, matches, orig_matches in scored_subtitles:
+        for subtitle, score, score_without_hash, matches, orig_matches in scored_subtitles:
             # check score
             if score < min_score:
                 logger.info('%r: Score %d is below min_score (%d)', subtitle, score, min_score)
@@ -564,7 +569,7 @@ def scan_video(path, dont_use_actual_file=False, hints=None, providers=None, ski
                 video.hashes['bsplayer'] = osub_hash = hash_opensubtitles(hash_path)
 
             if "opensubtitles" in providers:
-                video.hashes['opensubtitles'] = osub_hash = hash_opensubtitles(hash_path)
+                video.hashes['opensubtitles'] = osub_hash = osub_hash or hash_opensubtitles(hash_path)
 
             if "shooter" in providers:
                 video.hashes['shooter'] = hash_shooter(hash_path)
@@ -614,6 +619,11 @@ def _search_external_subtitles(path, languages=None, only_one=False, scandir_gen
 
         p_root, p_ext = os.path.splitext(p)
         if not INCLUDE_EXOTIC_SUBS and p_ext not in (".srt", ".ass", ".ssa", ".vtt"):
+            continue
+
+        if p_root.lower() == fn_no_ext_lower:
+            # skip check for language code if the subtitle file name is the same as the video name
+            subtitles[p] = None
             continue
 
         # extract potential forced/normal/default tag

@@ -21,6 +21,7 @@ from subliminal.subtitle import Episode, Movie, sanitize_release_group, get_equi
 from subliminal_patch.utils import sanitize
 from ftfy import fix_text
 from codecs import BOM_UTF8, BOM_UTF16_BE, BOM_UTF16_LE, BOM_UTF32_BE, BOM_UTF32_LE
+from six import text_type
 
 BOMS = (
     (BOM_UTF8, "UTF-8"),
@@ -54,6 +55,7 @@ class Subtitle(Subtitle_):
     is_pack = False
     asked_for_release_group = None
     asked_for_episode = None
+    uploader = None # string - uploader username
 
     pack_data = None
     _guessed_encoding = None
@@ -79,14 +81,21 @@ class Subtitle(Subtitle_):
         if not self.content:
             return
 
-        #if self.encoding:
-        #    return fix_text(self.content.decode(self.encoding, errors='replace'), **ftfy_defaults)
+        if not isinstance(self.content, text_type):
+            return self.content.decode(self.get_encoding(), errors='replace')
 
-        return self.content.decode(self.guess_encoding(), errors='replace')
+        return self.content
 
     @property
     def numeric_id(self):
         raise NotImplemented
+
+    def get_fps(self):
+        """
+        :return: frames per second or None if not supported
+        :rtype: float
+        """
+        return None
 
     def make_picklable(self):
         """
@@ -95,8 +104,11 @@ class Subtitle(Subtitle_):
         """
         return self
 
+    def get_encoding(self):
+        return self.guess_encoding()
+
     def set_encoding(self, encoding):
-        ge = self.guess_encoding()
+        ge = self.get_encoding()
         if encoding == ge:
             return
 
@@ -127,6 +139,16 @@ class Subtitle(Subtitle_):
         """
         if self._guessed_encoding:
             return self._guessed_encoding
+
+        if self.encoding:
+            # check provider encoding and use it only if it is valid
+            try:
+                self.content.decode(self.encoding)
+                self._guessed_encoding = self.encoding
+                return self._guessed_encoding
+            except:
+                # provider specified encoding is invalid, fallback to guessing
+                pass
 
         logger.info('Guessing encoding for language %s', self.language)
 
@@ -193,7 +215,7 @@ class Subtitle(Subtitle_):
 
         else:
             # Western European (windows-1252) / Northern European
-            encodings.extend(['latin-1', 'iso-8859-15', 'iso-8859-9', 'iso-8859-4', 'iso-8859-1'])
+            encodings.extend(['windows-1252', 'iso-8859-15', 'iso-8859-9', 'iso-8859-4', 'iso-8859-1'])
 
         # try to decode
         logger.debug('Trying encodings %r', encodings)
@@ -263,13 +285,17 @@ class Subtitle(Subtitle_):
                 else:
                     logger.info("Got format: %s", subs.format)
             except pysubs2.UnknownFPSError:
-                # if parsing failed, suggest our media file's fps
-                logger.info("No FPS info in subtitle. Using our own media FPS for the MicroDVD subtitle: %s",
-                            self.plex_media_fps)
-                subs = pysubs2.SSAFile.from_string(text, fps=self.plex_media_fps)
+                # if parsing failed, use frame rate from provider
+                sub_fps = self.get_fps()
+                if not isinstance(sub_fps, float) or sub_fps < 10.0:
+                    # or use our media file's fps as a fallback
+                    sub_fps = self.plex_media_fps
+                    logger.info("No FPS info in subtitle. Using our own media FPS for the MicroDVD subtitle: %s",
+                                self.plex_media_fps)
+                subs = pysubs2.SSAFile.from_string(text, fps=sub_fps)
 
             unicontent = self.pysubs2_to_unicode(subs)
-            self.content = unicontent.encode(self._guessed_encoding)
+            self.content = unicontent.encode(self.get_encoding())
         except:
             logger.exception("Couldn't convert subtitle %s to .srt format: %s", self, traceback.format_exc())
             return False
@@ -279,6 +305,12 @@ class Subtitle(Subtitle_):
 
     @classmethod
     def pysubs2_to_unicode(cls, sub, format="srt"):
+        """
+        this is a modified version of pysubs2.SubripFormat.to_file with special handling for drawing tags in ASS
+        :param sub:
+        :param format:
+        :return:
+        """
         def ms_to_timestamp(ms, mssep=","):
             """Convert ms to 'HH:MM:SS,mmm'"""
             # XXX throw on overflow/underflow?
@@ -293,6 +325,9 @@ class Subtitle(Subtitle_):
                 fragment = fragment.replace(r"\h", u" ")
                 fragment = fragment.replace(r"\n", u"\n")
                 fragment = fragment.replace(r"\N", u"\n")
+                if sty.drawing:
+                    raise pysubs2.ContentNotUsable
+
                 if format == "srt":
                     if sty.italic:
                         fragment = u"<i>%s</i>" % fragment
@@ -324,7 +359,10 @@ class Subtitle(Subtitle_):
         for i, line in enumerate(visible_lines, 1):
             start = ms_to_timestamp(line.start, mssep=mssep)
             end = ms_to_timestamp(line.end, mssep=mssep)
-            text = prepare_text(line.text, sub.styles.get(line.style, SSAStyle.DEFAULT_STYLE))
+            try:
+                text = prepare_text(line.text, sub.styles.get(line.style, SSAStyle.DEFAULT_STYLE))
+            except pysubs2.ContentNotUsable:
+                continue
 
             out.append(u"%d\n" % i)
             out.append(u"%s --> %s\n" % (start, end))
@@ -337,8 +375,8 @@ class Subtitle(Subtitle_):
         :return: string 
         """
         if not self.mods:
-            return fix_text(self.content.decode(encoding=self._guessed_encoding), **ftfy_defaults).encode(
-                encoding=self._guessed_encoding)
+            return fix_text(self.content.decode(encoding=self.get_encoding()), **ftfy_defaults).encode(
+                encoding=self.get_encoding())
 
         submods = SubtitleModifications(debug=debug)
         if submods.load(content=self.text, language=self.language):
@@ -347,7 +385,7 @@ class Subtitle(Subtitle_):
             self.mods = submods.mods_used
 
             content = fix_text(self.pysubs2_to_unicode(submods.f, format=format), **ftfy_defaults)\
-                .encode(encoding=self._guessed_encoding)
+                .encode(encoding=self.get_encoding())
             submods.f = None
             del submods
             return content
@@ -356,6 +394,15 @@ class Subtitle(Subtitle_):
 
 class ModifiedSubtitle(Subtitle):
     id = None
+
+
+MERGED_FORMATS = {
+    "TV": ("HDTV", "SDTV", "AHDTV", "UHDTV"),
+    "Air": ("SATRip", "DVB", "PPV"),
+    "Disk": ("DVD", "HD-DVD", "BluRay")
+}
+
+MERGED_FORMATS_REV = dict((v.lower(), k.lower()) for k in MERGED_FORMATS for v in MERGED_FORMATS[k])
 
 
 def guess_matches(video, guess, partial=False):
@@ -386,12 +433,15 @@ def guess_matches(video, guess, partial=False):
             for title in titles:
                 if sanitize(title) in (sanitize(name) for name in [video.series] + video.alternative_series):
                     matches.add('series')
+
         # title
         if video.title and 'episode_title' in guess and sanitize(guess['episode_title']) == sanitize(video.title):
             matches.add('title')
+
         # season
         if video.season and 'season' in guess and guess['season'] == video.season:
             matches.add('season')
+
         # episode
         # Currently we only have single-ep support (guessit returns a multi-ep as a list with int values)
         # Most providers only support single-ep, so make sure it contains only 1 episode
@@ -401,12 +451,15 @@ def guess_matches(video, guess, partial=False):
             episode = min(episode_guess) if episode_guess and isinstance(episode_guess, list) else episode_guess
             if episode == video.episode:
                 matches.add('episode')
+
         # year
         if video.year and 'year' in guess and guess['year'] == video.year:
             matches.add('year')
+
         # count "no year" as an information
         if not partial and video.original_series and 'year' not in guess:
             matches.add('year')
+
     elif isinstance(video, Movie):
         # year
         if video.year and 'year' in guess and guess['year'] == video.year:
@@ -433,28 +486,32 @@ def guess_matches(video, guess, partial=False):
     if video.resolution and 'screen_size' in guess and guess['screen_size'] == video.resolution:
         matches.add('resolution')
 
-    # format
-    if 'format' in guess:
-        formats = guess["format"]
+    # source
+    if 'source' in guess:
+        formats = guess["source"]
         if not isinstance(formats, list):
             formats = [formats]
 
-        if video.format:
-            video_format = video.format
-            if video_format in ("HDTV", "SDTV", "TV"):
-                video_format = "TV"
-                logger.debug("Treating HDTV/SDTV the same")
+        if video.source:
+            video_format = video.source.lower()
+            _video_gen_format = MERGED_FORMATS_REV.get(video_format)
+            if _video_gen_format:
+                logger.debug("Treating %s as %s the same", video_format, _video_gen_format)
 
             for frmt in formats:
-                if frmt in ("HDTV", "SDTV"):
-                    frmt = "TV"
+                _guess_gen_frmt = MERGED_FORMATS_REV.get(frmt.lower())
 
-                if frmt.lower() == video_format.lower():
-                    matches.add('format')
+                if _guess_gen_frmt == _video_gen_format:
+                    matches.add('source')
                     break
+        if "release_group" in matches and "source" not in matches:
+            logger.info("Release group matched but source didn't. Remnoving release group match.")
+            matches.remove("release_group")
+
     # video_codec
     if video.video_codec and 'video_codec' in guess and guess['video_codec'] == video.video_codec:
         matches.add('video_codec')
+
     # audio_codec
     if video.audio_codec and 'audio_codec' in guess and guess['audio_codec'] == video.audio_codec:
         matches.add('audio_codec')

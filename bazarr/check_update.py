@@ -1,5 +1,4 @@
 # coding=utf-8
-from __future__ import absolute_import
 import os
 import logging
 import json
@@ -8,7 +7,6 @@ import tarfile
 
 from get_args import args
 from config import settings
-from queueconfig import notifications
 from database import database
 
 if not args.no_update and not args.release_update:
@@ -34,6 +32,8 @@ def gitconfig():
         logging.debug('BAZARR Settings git email')
         config_write.set_value("user", "email", "bazarr@fake.email")
 
+    config_write.release()
+
 
 def check_and_apply_update():
     check_releases()
@@ -44,7 +44,6 @@ def check_and_apply_update():
         g.fetch('origin')
         result = g.diff('--shortstat', 'origin/' + branch)
         if len(result) == 0:
-            notifications.write(msg='No new version of Bazarr available.', queue='check_update')
             logging.info('BAZARR No new version of Bazarr available.')
         else:
             g.reset('--hard', 'HEAD')
@@ -58,9 +57,7 @@ def check_and_apply_update():
         releases = request_json(url, timeout=20, whitelist_status_code=404, validator=lambda x: type(x) == list)
         
         if releases is None:
-            notifications.write(msg='Could not get releases from GitHub.',
-                                queue='check_update', type='warning')
-            logging.warn('BAZARR Could not get releases from GitHub.')
+            logging.warning('BAZARR Could not get releases from GitHub.')
             return
         else:
             release = releases[0]
@@ -69,7 +66,6 @@ def check_and_apply_update():
         if ('v' + os.environ["BAZARR_VERSION"]) != latest_release:
             update_from_source()
         else:
-            notifications.write(msg='Bazarr is up to date', queue='check_update')
             logging.info('BAZARR is up to date')
 
 
@@ -78,13 +74,10 @@ def update_from_source():
     update_dir = os.path.join(os.path.dirname(__file__), '..', 'update')
     
     logging.info('BAZARR Downloading update from: ' + tar_download_url)
-    notifications.write(msg='Downloading update from: ' + tar_download_url, queue='check_update')
     data = request_content(tar_download_url)
     
     if not data:
         logging.error("BAZARR Unable to retrieve new version from '%s', can't update", tar_download_url)
-        notifications.write(msg=("Unable to retrieve new version from '%s', can't update", tar_download_url),
-                            type='error', queue='check_update')
         return
     
     download_name = settings.general.branch + '-github'
@@ -96,22 +89,18 @@ def update_from_source():
     
     # Extract the tar to update folder
     logging.info('BAZARR Extracting file: ' + tar_download_path)
-    notifications.write(msg='Extracting file: ' + tar_download_path, queue='check_update')
     tar = tarfile.open(tar_download_path)
     tar.extractall(update_dir)
     tar.close()
     
     # Delete the tar.gz
     logging.info('BAZARR Deleting file: ' + tar_download_path)
-    notifications.write(msg='Deleting file: ' + tar_download_path, queue='check_update')
     os.remove(tar_download_path)
     
     # Find update dir name
     update_dir_contents = [x for x in os.listdir(update_dir) if os.path.isdir(os.path.join(update_dir, x))]
     if len(update_dir_contents) != 1:
         logging.error("BAZARR Invalid update data, update failed: " + str(update_dir_contents))
-        notifications.write(msg="BAZARR Invalid update data, update failed: " + str(update_dir_contents),
-                            type='error', queue='check_update')
         return
     
     content_dir = os.path.join(update_dir, update_dir_contents[0])
@@ -294,12 +283,7 @@ def request_json(url, **kwargs):
 
 def updated(restart=True):
     if settings.general.getboolean('update_restart') and restart:
-        try:
-            requests.get('http://127.0.0.1:' + settings.general.port + settings.general.base_url + 'restart')
-        except requests.ConnectionError:
-            pass
-        except (requests.ConnectTimeout, requests.HTTPError, requests.ReadTimeout, requests.Timeout):
-            logging.info('BAZARR Restart failed, please restart Bazarr manually')
-            updated(restart=False)
+        from server import webserver
+        webserver.restart()
     else:
         database.execute("UPDATE system SET updated='1'")

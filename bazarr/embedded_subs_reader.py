@@ -1,33 +1,33 @@
-from __future__ import absolute_import
 import enzyme
 from enzyme.exceptions import MalformedMKVError
 import logging
 import os
-import subprocess
-import locale
+from knowit import api
 
-from utils import get_binary
-from pyprobe.pyprobe import VideoFileParser
-
-class NotMKVAndNoFFprobe(Exception):
-    pass
-
-class FFprobeError(Exception):
-    pass
 
 class EmbeddedSubsReader:
     def __init__(self):
-        self.ffprobe = get_binary("ffprobe")
+        self.ffprobe = None
     
     def list_languages(self, file):
+        from utils import get_binary
+        self.ffprobe = get_binary("ffprobe")
+
         subtitles_list = []
 
         if self.ffprobe:
-            parser = VideoFileParser(ffprobe=self.ffprobe, includeMissing=True, rawMode=False)
-            data = parser.parseFfprobe(file)
+            api.initialize({'provider': 'ffmpeg', 'ffmpeg': self.ffprobe})
+            data = api.know(file)
 
-            for detected_language in data['subtitles']:
-                subtitles_list.append([detected_language['language'], detected_language['forced'], detected_language["codec"]])
+            if 'subtitle' in data:
+                for detected_language in data['subtitle']:
+                    if 'language' in detected_language:
+                        language = detected_language['language'].alpha3
+                        forced = detected_language['forced'] if 'forced' in detected_language else None
+                        codec = detected_language['format'] if 'format' in detected_language else None
+                        subtitles_list.append([language, forced, codec])
+                    else:
+                        continue
         else:
             if os.path.splitext(file)[1] == '.mkv':
                 with open(file, 'rb') as f:
