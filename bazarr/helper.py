@@ -109,10 +109,10 @@ def pp_replace(pp_command, episode, subtitles, language, language_code2, languag
     pp_command = pp_command.replace('{{episode_language_code2}}', episode_language_code2)
     pp_command = pp_command.replace('{{episode_language_code3}}', episode_language_code3)
     pp_command = pp_command.replace('{{score}}', str(score))
-    pp_command = pp_command.replace('{{subtitle_id}}', subtitle_id)
-    pp_command = pp_command.replace('{{provider}}', provider)
-    pp_command = pp_command.replace('{{series_id}}', series_id)
-    pp_command = pp_command.replace('{{episode_id}}', episode_id)
+    pp_command = pp_command.replace('{{subtitle_id}}', str(subtitle_id))
+    pp_command = pp_command.replace('{{provider}}', str(provider))
+    pp_command = pp_command.replace('{{series_id}}', str(series_id))
+    pp_command = pp_command.replace('{{episode_id}}', str(episode_id))
 
     return pp_command
 
