@@ -216,12 +216,6 @@ def download_subtitle(path, language, audio_language, hi, forced, providers, pro
                         audio_language_code3 = alpha3_from_language(audio_language)
                         downloaded_path = subtitle.storage_path
                         subtitle_id = subtitle.id
-                        if media_type == 'series':
-                            series_id = episode_metadata['sonarrSeriesId']
-                            episode_id = episode_metadata['sonarrEpisodeId']
-                        else:
-                            series_id = ""
-                            episode_id = movie_metadata['radarrId']
                         is_forced_string = " forced" if subtitle.language.forced else ""
                         logging.debug('BAZARR Subtitles file saved to disk: ' + downloaded_path)
                         if is_upgrade:
@@ -237,6 +231,8 @@ def download_subtitle(path, language, audio_language, hi, forced, providers, pro
                                                                 "table_episodes WHERE path = ?",
                                                                 (path_mappings.path_replace_reverse(path),),
                                                                 only_one=True)
+                            series_id = episode_metadata['sonarrSeriesId']
+                            episode_id = episode_metadata['sonarrEpisodeId']
                             sync_subtitles(video_path=path, srt_path=downloaded_path,
                                            srt_lang=downloaded_language_code3, media_type=media_type,
                                            percent_score=percent_score,
@@ -246,6 +242,8 @@ def download_subtitle(path, language, audio_language, hi, forced, providers, pro
                             movie_metadata = database.execute("SELECT radarrId FROM table_movies WHERE path = ?",
                                                               (path_mappings.path_replace_reverse_movie(path),),
                                                               only_one=True)
+                            series_id = ""
+                            episode_id = movie_metadata['radarrId']
                             sync_subtitles(video_path=path, srt_path=downloaded_path,
                                            srt_lang=downloaded_language_code3, media_type=media_type,
                                            percent_score=percent_score,
