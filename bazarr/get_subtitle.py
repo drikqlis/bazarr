@@ -215,6 +215,13 @@ def download_subtitle(path, language, audio_language, hi, forced, providers, pro
                         audio_language_code2 = alpha2_from_language(audio_language)
                         audio_language_code3 = alpha3_from_language(audio_language)
                         downloaded_path = subtitle.storage_path
+                        subtitle_id = subtitle.id
+                        if media_type == 'series':
+                            series_id = episode_metadata['sonarrSeriesId']
+                            episode_id = episode_metadata['sonarrEpisodeId']
+                        else:
+                            series_id = ""
+                            episode_id = movie_metadata['radarrId']
                         is_forced_string = " forced" if subtitle.language.forced else ""
                         logging.debug('BAZARR Subtitles file saved to disk: ' + downloaded_path)
                         if is_upgrade:
@@ -248,7 +255,7 @@ def download_subtitle(path, language, audio_language, hi, forced, providers, pro
                             command = pp_replace(postprocessing_cmd, path, downloaded_path, downloaded_language,
                                                  downloaded_language_code2, downloaded_language_code3, audio_language,
                                                  audio_language_code2, audio_language_code3, subtitle.language.forced,
-                                                 percent_score)
+                                                 percent_score, subtitle_id, downloaded_provider, series_id, episode_id)
 
                             if media_type == 'series':
                                 use_pp_threshold = settings.general.getboolean('use_postprocessing_threshold')
