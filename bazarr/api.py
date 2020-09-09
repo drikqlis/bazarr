@@ -1718,7 +1718,7 @@ class BlacklistEpisodeSubtitlesAdd(Resource):
                          subtitles_path=path_mappings.path_replace(subtitles_path),
                          sonarr_series_id=sonarr_series_id,
                          sonarr_episode_id=sonarr_episode_id)
-        episode_download_subtitles(sonarr_episode_id)
+        #episode_download_subtitles(sonarr_episode_id)
         event_stream(type='episodeHistory')
         return '', 200
 
@@ -1793,7 +1793,7 @@ class BlacklistMovieSubtitlesAdd(Resource):
                          media_path=path_mappings.path_replace_movie(media_path),
                          subtitles_path=path_mappings.path_replace_movie(subtitles_path),
                          radarr_id=radarr_id)
-        movies_download_subtitles(radarr_id)
+        #movies_download_subtitles(radarr_id)
         event_stream(type='movieHistory')
         return '', 200
 
