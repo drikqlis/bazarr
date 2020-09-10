@@ -5,16 +5,33 @@ import logging
 import subliminal_patch
 import pretty
 import time
+import socket
+import requests
 
 from get_args import args
 from config import settings
-from subliminal_patch.exceptions import TooManyRequests, APIThrottled, ParseResponseError
+from event_handler import event_stream
+from subliminal_patch.exceptions import TooManyRequests, APIThrottled, ParseResponseError, IPAddressBlocked
+from subliminal.providers.opensubtitles import DownloadLimitReached
 from subliminal.exceptions import DownloadLimitExceeded, ServiceUnavailable
 from subliminal import region as subliminal_cache_region
 
+def time_until_end_of_day(dt=None):
+    # type: (datetime.datetime) -> datetime.timedelta
+    """
+    Get timedelta until end of day on the datetime passed, or current time.
+    """
+    if dt is None:
+        dt = datetime.datetime.now()
+    tomorrow = dt + datetime.timedelta(days=1)
+    return datetime.datetime.combine(tomorrow, datetime.time.min) - dt
+
+hours_until_end_of_day = time_until_end_of_day().seconds // 3600 + 1
+
 VALID_THROTTLE_EXCEPTIONS = (TooManyRequests, DownloadLimitExceeded, ServiceUnavailable, APIThrottled,
-                             ParseResponseError)
-VALID_COUNT_EXCEPTIONS = ('TooManyRequests', 'ServiceUnavailable', 'APIThrottled')
+                             ParseResponseError, IPAddressBlocked)
+VALID_COUNT_EXCEPTIONS = ('TooManyRequests', 'ServiceUnavailable', 'APIThrottled', requests.exceptions.Timeout,
+                          requests.exceptions.ConnectTimeout, requests.exceptions.ReadTimeout, socket.timeout)
 
 PROVIDER_THROTTLE_MAP = {
     "default": {
@@ -23,22 +40,33 @@ PROVIDER_THROTTLE_MAP = {
         ServiceUnavailable: (datetime.timedelta(minutes=20), "20 minutes"),
         APIThrottled: (datetime.timedelta(minutes=10), "10 minutes"),
         ParseResponseError: (datetime.timedelta(hours=6), "6 hours"),
+        requests.exceptions.Timeout: (datetime.timedelta(hours=1), "1 hour"),
+        socket.timeout: (datetime.timedelta(hours=1), "1 hour"),
+        requests.exceptions.ConnectTimeout: (datetime.timedelta(hours=1), "1 hour"),
+        requests.exceptions.ReadTimeout: (datetime.timedelta(hours=1), "1 hour"),
     },
     "opensubtitles": {
         TooManyRequests: (datetime.timedelta(hours=3), "3 hours"),
         DownloadLimitExceeded: (datetime.timedelta(hours=6), "6 hours"),
+        DownloadLimitReached: (datetime.timedelta(hours=6), "6 hours"),
         APIThrottled: (datetime.timedelta(seconds=15), "15 seconds"),
     },
     "addic7ed": {
         DownloadLimitExceeded: (datetime.timedelta(hours=3), "3 hours"),
         TooManyRequests: (datetime.timedelta(minutes=5), "5 minutes"),
+        IPAddressBlocked: (datetime.timedelta(hours=1), "1 hours"),
     },
     "titulky": {
         DownloadLimitExceeded: (datetime.timedelta(hours=3), "3 hours")
+    },
+    "legendasdivx": {
+        TooManyRequests: (datetime.timedelta(hours=3), "3 hours"),
+        DownloadLimitExceeded: (datetime.timedelta(hours=hours_until_end_of_day), "{} hours".format(str(hours_until_end_of_day))),
+        IPAddressBlocked: (datetime.timedelta(hours=hours_until_end_of_day), "{} hours".format(str(hours_until_end_of_day))),
     }
 }
 
-PROVIDERS_FORCED_OFF = ["addic7ed", "tvsubtitles", "legendastv", "napiprojekt", "shooter", "hosszupuska",
+PROVIDERS_FORCED_OFF = ["addic7ed", "tvsubtitles", "legendasdivx", "legendastv", "napiprojekt", "shooter", "hosszupuska",
                         "supersubtitles", "titlovi", "argenteam", "assrt", "subscene"]
 
 throttle_count = {}
@@ -94,7 +122,6 @@ def get_providers_auth():
     providers_auth = {
         'addic7ed': {'username': settings.addic7ed.username,
                      'password': settings.addic7ed.password,
-                     'use_random_agents': settings.addic7ed.getboolean('random_agents'),
                      },
         'opensubtitles': {'username': settings.opensubtitles.username,
                           'password': settings.opensubtitles.password,
@@ -114,6 +141,10 @@ def get_providers_auth():
                      'password': settings.subscene.password,
                      'only_foreign': False,  # fixme
                      },
+        'legendasdivx': {'username': settings.legendasdivx.username,
+                       'password': settings.legendasdivx.password,
+                       'skip_wrong_fps': settings.legendasdivx.getboolean('skip_wrong_fps'),
+                       },
         'legendastv': {'username': settings.legendastv.username,
                        'password': settings.legendastv.password,
                        },
@@ -170,6 +201,7 @@ def provider_throttle(name, exception):
             logging.info("Throttling %s for %s, until %s, because of: %s. Exception info: %r", name,
                          throttle_description, throttle_until.strftime("%y/%m/%d %H:%M"), cls_name, exception.args[0]
                          if exception.args else None)
+            update_throttled_provider()
 
 
 def throttled_count(name):
@@ -227,6 +259,8 @@ def update_throttled_provider():
             with open(os.path.join(args.config_dir, 'config', 'config.ini'), 'w+') as handle:
                 settings.write(handle)
 
+        event_stream(type='badges_providers')
+
 
 def list_throttled_providers():
     update_throttled_provider()
@@ -236,3 +270,13 @@ def list_throttled_providers():
             reason, until, throttle_desc = tp.get(provider, (None, None, None))
             throttled_providers.append([provider, reason, pretty.date(until)])
     return throttled_providers
+
+
+def reset_throttled_providers():
+    for provider in list(tp):
+        del tp[provider]
+    settings.general.throtteled_providers = str(tp)
+    with open(os.path.join(args.config_dir, 'config', 'config.ini'), 'w+') as handle:
+        settings.write(handle)
+    update_throttled_provider()
+    logging.info('BAZARR throttled providers have been reset.')

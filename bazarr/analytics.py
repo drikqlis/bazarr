@@ -1,8 +1,6 @@
 # coding=utf-8
 
-from __future__ import absolute_import
-import six.moves.cPickle as pickle
-import base64
+import pickle
 import random
 import platform
 import os
@@ -36,6 +34,9 @@ def track_event(category=None, action=None, label=None):
                 visitor.user_agent = os.environ.get("SZ_USER_AGENT")
             if visitor.unique_id > int(0x7fffffff):
                 visitor.unique_id = random.randint(0, 0x7fffffff)
+        else:
+            visitor = Visitor()
+            visitor.unique_id = random.randint(0, 0x7fffffff)
     except:
         visitor = Visitor()
         visitor.unique_id = random.randint(0, 0x7fffffff)

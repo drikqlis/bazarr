@@ -43,11 +43,11 @@ class Addic7edSubtitle(_Addic7edSubtitle):
         if not subliminal.score.episode_scores.get("addic7ed_boost"):
             return matches
 
-        # if the release group matches, the format is most likely correct, as well
+        # if the release group matches, the source is most likely correct, as well
         if "release_group" in matches:
-            matches.add("format")
+            matches.add("source")
 
-        if {"series", "season", "episode", "year"}.issubset(matches) and "format" in matches:
+        if {"series", "season", "episode", "year"}.issubset(matches) and "source" in matches:
             matches.add("addic7ed_boost")
             logger.info("Boosting Addic7ed subtitle by %s" % subliminal.score.episode_scores.get("addic7ed_boost"))
         return matches
@@ -178,7 +178,8 @@ class Addic7edProvider(_Addic7edProvider):
         :rtype: int
         """
         show_id = None
-        ids_to_look_for = {sanitize(series).lower(), sanitize(series.replace(".", "")).lower()}
+        ids_to_look_for = {sanitize(series).lower(), sanitize(series.replace(".", "")).lower(),
+                           sanitize(series.replace("&", "and")).lower()}
         show_ids = self._get_show_ids()
         if ignore_cache or not show_ids:
             show_ids = self._get_show_ids.refresh(self)

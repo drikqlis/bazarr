@@ -66,7 +66,6 @@ class TitulkySubtitle(Subtitle):
         self.version = version
         self.year = year
         self.download_link = download_link
-        self.encoding = 'UTF-8'
         for t in title:
             self.title = t
         if year:
@@ -244,7 +243,7 @@ class TitulkyProvider(Provider):
             for sub in subs:
                 page_link = '%s%s' % (self.server_url, sub.a.get('href').encode('utf-8'))
                 title = sub.find_all('td')[0:1]
-                title = [x.text.encode('utf-8') for x in title]
+                title = [x.text for x in title]
                 version = sub.find(class_="fixedTip")
                 if version is None:
                     version = ""
@@ -316,13 +315,12 @@ class TitulkyProvider(Provider):
             elif 'Limit vyčerpán' in r.text:
                 raise DownloadLimitExceeded
             
-            soup = ParserBeautifulSoup(r.text.decode('utf-8', 'ignore'), ['lxml', 'html.parser'])
+            soup = ParserBeautifulSoup(r.text, ['lxml', 'html.parser'])
             # links = soup.find("a", {"id": "downlink"}).find_all('a')
             link = soup.find(id="downlink")
             # TODO: add settings for choice
             
-            url = link.get('href')
-            url = self.dn_url + url
+            url = self.dn_url + link.get('href')
             time.sleep(0.5)
             r = self.session.get(url, headers={'Referer': subtitle.download_link},
                                  timeout=30)

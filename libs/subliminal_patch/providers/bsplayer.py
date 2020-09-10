@@ -1,36 +1,29 @@
 # -*- coding: utf-8 -*-
 from __future__ import absolute_import
 import logging
-import re
 import io
-import os
-import sys
 
 from requests import Session
 from guessit import guessit
-from babelfish import language_converters
 from subliminal_patch.providers import Provider
 from subliminal_patch.subtitle import Subtitle
-from subliminal_patch.utils import sanitize
-from subliminal.exceptions import ProviderError
 from subliminal.utils import sanitize_release_group
 from subliminal.subtitle import guess_matches
 from subliminal.video import Episode, Movie
-from subliminal.subtitle import fix_line_ending
 from subzero.language import Language
-from .utils import FIRST_THOUSAND_OR_SO_USER_AGENTS as AGENT_LIST
 
 import gzip
 import random
 from time import sleep
 from xml.etree import ElementTree
-import struct
 
 logger = logging.getLogger(__name__)
+
 
 class BSPlayerSubtitle(Subtitle):
     """BSPlayer Subtitle."""
     provider_name = 'bsplayer'
+    hash_verifiable = True
 
     def __init__(self, language, filename, subtype, video, link):
         super(BSPlayerSubtitle, self).__init__(language)
@@ -44,27 +37,62 @@ class BSPlayerSubtitle(Subtitle):
     def id(self):
         return self.page_link
 
+    @property
+    def release_info(self):
+        return self.filename
+
     def get_matches(self, video):
         matches = set()
-
-        video_filename = video.name
-        video_filename = os.path.basename(video_filename)
-        video_filename, _ = os.path.splitext(video_filename)
-        video_filename = sanitize_release_group(video_filename)
-
-        subtitle_filename = self.filename
-        subtitle_filename = os.path.basename(subtitle_filename)
-        subtitle_filename, _ = os.path.splitext(subtitle_filename)
-        subtitle_filename = sanitize_release_group(subtitle_filename)
-
-
         matches |= guess_matches(video, guessit(self.filename))
 
-        matches.add(id(self))
+        subtitle_filename = self.filename
+
+        # episode
+        if isinstance(video, Episode):
+            # already matched in search query
+            matches.update(['title', 'series', 'season', 'episode', 'year'])
+
+        # movie
+        elif isinstance(video, Movie):
+            # already matched in search query
+            matches.update(['title', 'year'])
+
+        # release_group
+        if video.release_group and video.release_group.lower() in subtitle_filename:
+            matches.add('release_group')
+
+        # resolution
+        if video.resolution and video.resolution.lower() in subtitle_filename:
+            matches.add('resolution')
+
+        # source
+        formats = []
+        if video.source:
+            formats = [video.source.lower()]
+            if formats[0] == "web":
+                formats.append("webdl")
+                formats.append("webrip")
+                formats.append("web ")
+            for frmt in formats:
+                if frmt.lower() in subtitle_filename:
+                    matches.add('source')
+                    break
+
+        # video_codec
+        if video.video_codec:
+            video_codecs = [video.video_codec.lower()]
+            if video_codecs[0] == "H.264":
+                formats.append("x264")
+            elif video_codecs[0] == "H.265":
+                formats.append("x265")
+            for vc in formats:
+                if vc.lower() in subtitle_filename:
+                    matches.add('video_codec')
+                    break
+
         matches.add('hash')
 
         return matches
-
 
 
 class BSPlayerProvider(Provider):
@@ -74,6 +102,7 @@ class BSPlayerProvider(Provider):
         'ron', 'rus', 'spa', 'swe', 'tur', 'ukr', 'zho'
     ]}
     SEARCH_THROTTLE = 8
+    hash_verifiable = True
 
     # batantly based on kodi's bsplayer plugin
     # also took from BSPlayer-Subtitles-Downloader
@@ -113,18 +142,11 @@ class BSPlayerProvider(Provider):
                 res = self.session.post(self.search_url, data)
                 return ElementTree.fromstring(res.text)
 
-                ### with requests
-                # res = requests.post(
-                #     url=self.search_url,
-                #     data=data,
-                #     headers=headers
-                # ) 
-                # return ElementTree.fromstring(res.text)
-               
             except Exception as ex:
                 logger.info("ERROR: %s." % ex)
                 if func_name == 'logIn':
                     self.search_url = self.get_sub_domain()
+
                 sleep(1)
         logger.info('ERROR: Too many tries (%d)...' % tries)
         raise Exception('Too many tries...')
@@ -172,7 +194,6 @@ class BSPlayerProvider(Provider):
             # language_ids = 'spa'
             language_ids = ','.join(sorted(l.opensubtitles for l in language))
 
-
         if video.imdb_id is None:
             imdbId = '*'
         else:
@@ -198,13 +219,13 @@ class BSPlayerProvider(Provider):
         if items:
             logger.info("Subtitles Found.")
             for item in items:
-                subID=item.find('subID').text
-                subDownloadLink=item.find('subDownloadLink').text
-                subLang= Language.fromopensubtitles(item.find('subLang').text)
-                subName=item.find('subName').text
-                subFormat=item.find('subFormat').text
+                subID = item.find('subID').text
+                subDownloadLink = item.find('subDownloadLink').text
+                subLang = Language.fromopensubtitles(item.find('subLang').text)
+                subName = item.find('subName').text
+                subFormat = item.find('subFormat').text
                 subtitles.append(
-                    BSPlayerSubtitle(subLang,subName, subFormat, video, subDownloadLink)
+                    BSPlayerSubtitle(subLang, subName, subFormat, video, subDownloadLink)
                 )
         return subtitles
 
@@ -212,9 +233,9 @@ class BSPlayerProvider(Provider):
         return self.query(video, video.hashes['bsplayer'], languages)
 
     def get_sub_domain(self):
-    # s1-9, s101-109
-        SUB_DOMAINS = ['s1', 's2', 's3', 's4', 's5', 's6', 's7', 's8', 's9',
-                's101', 's102', 's103', 's104', 's105', 's106', 's107', 's108', 's109']
+        # s1-9, s101-109
+        SUB_DOMAINS = ['s1', 's2', 's3', 's4', 's5', 's6', 's7', 's8',
+                       's101', 's102', 's103', 's104', 's105', 's106', 's107', 's108', 's109']
         API_URL_TEMPLATE = "http://{sub_domain}.api.bsplayer-subtitles.com/v1.php"
         sub_domains_end = len(SUB_DOMAINS) - 1
         return API_URL_TEMPLATE.format(sub_domain=SUB_DOMAINS[random.randint(0, sub_domains_end)])
@@ -231,10 +252,8 @@ class BSPlayerProvider(Provider):
                 raise ValueError('Error 500 on server')
 
             with gzip.GzipFile(fileobj=io.BytesIO(res.content)) as gf:
-                subtitle.content = gf.read() 
+                subtitle.content = gf.read()
                 subtitle.normalize()
 
             return subtitle
         raise ValueError('Problems conecting to the server')
-
-

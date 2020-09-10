@@ -44,6 +44,10 @@ class BetaSeriesSubtitle(Subtitle):
     def download_link(self):
         return self.download_url
 
+    @property
+    def release_info(self):
+        return self.video_name
+
     def get_matches(self, video):
         matches = self.matches
 
@@ -135,7 +139,11 @@ class BetaSeriesProvider(Provider):
     def download_subtitle(self, subtitle):
         logger.info('Downloading subtitle %r', subtitle)
         r = self.session.get(subtitle.download_link, timeout=10)
-        r.raise_for_status()
+        if r.status_code == 404:
+            logger.error('Error 404 downloading %r', subtitle)
+            return
+        else:
+            r.raise_for_status()
 
         archive = _get_archive(r.content)
         if archive:
@@ -149,7 +157,7 @@ class BetaSeriesProvider(Provider):
         if subtitle_content:
             subtitle.content = fix_line_ending(subtitle_content)
         else:
-            logger.debug('Could not extract subtitle from %r', archive)
+            logger.error('Could not extract subtitle from %r', archive)
 
 
 def _get_archive(content):

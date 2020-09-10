@@ -1,17 +1,13 @@
 # coding=utf-8
-from __future__ import absolute_import
-import os
 import requests
 import logging
-import re
-from queueconfig import notifications
-from database import database, dict_converter
+from database import database, dict_converter, get_exclusion_clause
 
-from get_args import args
 from config import settings, url_sonarr
-from helper import path_replace
+from helper import path_mappings
 from list_subtitles import list_missing_subtitles, store_subtitles, series_full_scan_subtitles
 from get_subtitle import episode_download_subtitles
+from event_handler import event_stream
 
 
 def update_all_episodes():
@@ -20,7 +16,6 @@ def update_all_episodes():
 
 
 def sync_episodes():
-    notifications.write(msg='Episodes sync from Sonarr started...', queue='get_episodes')
     logging.debug('BAZARR Starting episodes sync from Sonarr.')
     apikey_sonarr = settings.sonarr.apikey
     
@@ -37,9 +32,7 @@ def sync_episodes():
     # Get sonarrId for each series from database
     seriesIdList = database.execute("SELECT sonarrSeriesId, title FROM table_shows")
     
-    seriesIdListLength = len(seriesIdList)
-    for i, seriesId in enumerate(seriesIdList, 1):
-        notifications.write(msg='Getting episodes data from Sonarr...', queue='get_episodes', item=i, length=seriesIdListLength)
+    for i, seriesId in enumerate(seriesIdList):
         # Get episodes data for a series from Sonarr
         url_sonarr_api_episode = url_sonarr() + "/api/episode?seriesId=" + str(seriesId['sonarrSeriesId']) + "&apikey=" + apikey_sonarr
         try:
@@ -92,6 +85,13 @@ def sync_episodes():
                                     videoCodec = None
                                     audioCodec = None
 
+                                audio_language = None
+                                if 'language' in episode['episodeFile'] and len(episode['episodeFile']['language']):
+                                    item = episode['episodeFile']['language']
+                                    if isinstance(item, dict):
+                                        if 'name' in item:
+                                            audio_language = item['name']
+
                                 # Add episodes in sonarr to current episode list
                                 current_episodes_sonarr.append(episode['id'])
                                 
@@ -108,7 +108,8 @@ def sync_episodes():
                                                                'resolution': resolution,
                                                                'video_codec': videoCodec,
                                                                'audio_codec': audioCodec,
-                                                               'episode_file_id': episode['episodeFile']['id']})
+                                                               'episode_file_id': episode['episodeFile']['id'],
+                                                               'audio_language': audio_language})
                                 else:
                                     episodes_to_add.append({'sonarrSeriesId': episode['seriesId'],
                                                             'sonarrEpisodeId': episode['id'],
@@ -122,19 +123,24 @@ def sync_episodes():
                                                             'resolution': resolution,
                                                             'video_codec': videoCodec,
                                                             'audio_codec': audioCodec,
-                                                            'episode_file_id': episode['episodeFile']['id']})
+                                                            'episode_file_id': episode['episodeFile']['id'],
+                                                            'audio_language': audio_language})
 
     # Remove old episodes from DB
     removed_episodes = list(set(current_episodes_db_list) - set(current_episodes_sonarr))
 
     for removed_episode in removed_episodes:
+        episode_to_delete = database.execute("SELECT sonarrSeriesId, sonarrEpisodeId FROM table_episodes WHERE "
+                                             "sonarrEpisodeId=?", (removed_episode,), only_one=True)
         database.execute("DELETE FROM table_episodes WHERE sonarrEpisodeId=?", (removed_episode,))
+        event_stream(type='episode', action='delete', series=episode_to_delete['sonarrSeriesId'],
+                     episode=episode_to_delete['sonarrEpisodeId'])
 
     # Update existing episodes in DB
     episode_in_db_list = []
     episodes_in_db = database.execute("SELECT sonarrSeriesId, sonarrEpisodeId, title, path, season, episode, "
                                       "scene_name, monitored, format, resolution, video_codec, audio_codec, "
-                                      "episode_file_id FROM table_episodes")
+                                      "episode_file_id, audio_language FROM table_episodes")
 
     for item in episodes_in_db:
         episode_in_db_list.append(item)
@@ -156,16 +162,17 @@ def sync_episodes():
             '''INSERT OR IGNORE INTO table_episodes(''' + query.keys_insert + ''') VALUES(''' + query.question_marks +
             ''')''', query.values)
         if result > 0:
-            altered_episodes.append([added_episode['sonarrEpisodeId'], added_episode['path']])
+            altered_episodes.append([added_episode['sonarrEpisodeId'],
+                                     added_episode['path'],
+                                     added_episode['monitored']])
+            event_stream(type='episode', action='insert', series=added_episode['sonarrSeriesId'],
+                         episode=added_episode['sonarrEpisodeId'])
         else:
-            logging.debug('BAZARR unable to insert this episode into the database:',
-                          path_replace(added_episode['path']))
+            logging.debug('BAZARR unable to insert this episode into the database:{}'.format(path_mappings.path_replace(added_episode['path'])))
 
     # Store subtitles for added or modified episodes
     for i, altered_episode in enumerate(altered_episodes, 1):
-        notifications.write(msg='Indexing episodes embedded subtitles...', queue='get_episodes', item=i,
-                            length=len(altered_episodes))
-        store_subtitles(altered_episode[1], path_replace(altered_episode[1]))
+        store_subtitles(altered_episode[1], path_mappings.path_replace(altered_episode[1]))
 
     logging.debug('BAZARR All episodes synced from Sonarr into database.')
 
@@ -173,7 +180,13 @@ def sync_episodes():
     if len(altered_episodes) <= 5:
         logging.debug("BAZARR No more than 5 episodes were added during this sync then we'll search for subtitles.")
         for altered_episode in altered_episodes:
-            episode_download_subtitles(altered_episode[0])
+            data = database.execute("SELECT table_episodes.sonarrEpisodeId, table_episodes.monitored, table_shows.tags,"
+                                    " table_shows.seriesType FROM table_episodes LEFT JOIN table_shows on "
+                                    "table_episodes.sonarrSeriesId = table_shows.sonarrSeriesId WHERE "
+                                    "sonarrEpisodeId = ?" + get_exclusion_clause('series'), (altered_episode[0],),
+                                    only_one=True)
+
+            episode_download_subtitles(data['sonarrEpisodeId'])
     else:
         logging.debug("BAZARR More than 5 episodes were added during this sync then we wont search for subtitles right now.")
 

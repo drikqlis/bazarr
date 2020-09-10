@@ -32,7 +32,11 @@ from subliminal.core import guessit, ProviderPool, io, is_windows_special_path, 
 from subliminal_patch.exceptions import TooManyRequests, APIThrottled
 
 from subzero.language import Language, ENDSWITH_LANGUAGECODE_RE, FULL_LANGUAGE_LIST
-from scandir import scandir, scandir_generic as _scandir_generic
+try:
+    from os import scandir
+    _scandir_generic = scandir
+except ImportError:
+    from scandir import scandir, scandir_generic as _scandir_generic
 import six
 
 logger = logging.getLogger(__name__)
@@ -110,10 +114,12 @@ class SZProviderPool(ProviderPool):
         try:
             logger.info('Terminating provider %s', name)
             self.initialized_providers[name].terminate()
-        except (requests.Timeout, socket.timeout):
+        except (requests.Timeout, socket.timeout) as e:
             logger.error('Provider %r timed out, improperly terminated', name)
-        except:
+            self.throttle_callback(name, e)
+        except Exception as e:
             logger.exception('Provider %r terminated unexpectedly', name)
+            self.throttle_callback(name, e)
 
         del self.initialized_providers[name]
 
@@ -174,7 +180,7 @@ class SZProviderPool(ProviderPool):
             seen = []
             out = []
             for s in results:
-                if (str(provider) + ';' + str(s.id)) in self.blacklist:
+                if (str(provider), str(s.id)) in self.blacklist:
                     logger.info("Skipping blacklisted subtitle: %s", s)
                     continue
                 if s.id in seen:
@@ -185,8 +191,9 @@ class SZProviderPool(ProviderPool):
 
             return out
 
-        except (requests.Timeout, socket.timeout):
+        except (requests.Timeout, socket.timeout) as e:
             logger.error('Provider %r timed out', provider)
+            self.throttle_callback(provider, e)
 
         except Exception as e:
             logger.exception('Unexpected error in provider %r: %s', provider, traceback.format_exc())
@@ -265,10 +272,11 @@ class SZProviderPool(ProviderPool):
                     requests.exceptions.ProxyError,
                     requests.exceptions.SSLError,
                     requests.Timeout,
-                    socket.timeout):
+                    socket.timeout) as e:
                 logger.error('Provider %r connection error', subtitle.provider_name)
+                self.throttle_callback(subtitle.provider_name, e)
 
-            except ResponseNotReady:
+            except ResponseNotReady as e:
                 logger.error('Provider %r response error, reinitializing', subtitle.provider_name)
                 try:
                     self[subtitle.provider_name].terminate()
@@ -276,6 +284,7 @@ class SZProviderPool(ProviderPool):
                 except:
                     logger.error('Provider %r reinitialization error: %s', subtitle.provider_name,
                                  traceback.format_exc())
+                    self.throttle_callback(subtitle.provider_name, e)
 
             except rarfile.BadRarFile:
                 logger.error('Malformed RAR file from provider %r, skipping subtitle.', subtitle.provider_name)
@@ -356,15 +365,16 @@ class SZProviderPool(ProviderPool):
             orig_matches = matches.copy()
 
             logger.debug('%r: Found matches %r', s, matches)
+            score, score_without_hash = compute_score(matches, s, video, hearing_impaired=use_hearing_impaired)
             unsorted_subtitles.append(
-                (s, compute_score(matches, s, video, hearing_impaired=use_hearing_impaired), matches, orig_matches))
+                (s, score, score_without_hash, matches, orig_matches))
 
         # sort subtitles by score
-        scored_subtitles = sorted(unsorted_subtitles, key=operator.itemgetter(1), reverse=True)
+        scored_subtitles = sorted(unsorted_subtitles, key=operator.itemgetter(1, 2), reverse=True)
 
         # download best subtitles, falling back on the next on error
         downloaded_subtitles = []
-        for subtitle, score, matches, orig_matches in scored_subtitles:
+        for subtitle, score, score_without_hash, matches, orig_matches in scored_subtitles:
             # check score
             if score < min_score:
                 logger.info('%r: Score %d is below min_score (%d)', subtitle, score, min_score)
@@ -564,7 +574,7 @@ def scan_video(path, dont_use_actual_file=False, hints=None, providers=None, ski
                 video.hashes['bsplayer'] = osub_hash = hash_opensubtitles(hash_path)
 
             if "opensubtitles" in providers:
-                video.hashes['opensubtitles'] = osub_hash = hash_opensubtitles(hash_path)
+                video.hashes['opensubtitles'] = osub_hash = osub_hash or hash_opensubtitles(hash_path)
 
             if "shooter" in providers:
                 video.hashes['shooter'] = hash_shooter(hash_path)
@@ -614,6 +624,11 @@ def _search_external_subtitles(path, languages=None, only_one=False, scandir_gen
 
         p_root, p_ext = os.path.splitext(p)
         if not INCLUDE_EXOTIC_SUBS and p_ext not in (".srt", ".ass", ".ssa", ".vtt"):
+            continue
+
+        if p_root.lower() == fn_no_ext_lower:
+            # skip check for language code if the subtitle file name is the same as the video name
+            subtitles[p] = None
             continue
 
         # extract potential forced/normal/default tag
