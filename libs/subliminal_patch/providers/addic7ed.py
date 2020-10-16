@@ -21,8 +21,6 @@ from subzero.language import Language
 
 logger = logging.getLogger(__name__)
 
-show_cells_re = re.compile(b'<td class="(?:version|vr)">.*?</td>', re.DOTALL)
-
 #: Series header parsing regex
 series_year_re = re.compile(r'^(?P<series>[ \w\'.:(),*&!?-]+?)(?: \((?P<year>\d{4})\))?$')
 
@@ -36,7 +34,7 @@ class Addic7edSubtitle(_Addic7edSubtitle):
                  download_link):
         super(Addic7edSubtitle, self).__init__(language, hearing_impaired, page_link, series, season, episode,
                                                title, year, version, download_link)
-        self.release_info = version
+        self.release_info = version.replace('+', ',')
 
     def get_matches(self, video):
         matches = super(Addic7edSubtitle, self).get_matches(video)
@@ -63,6 +61,7 @@ class Addic7edProvider(_Addic7edProvider):
         'heb', 'hrv', 'hun', 'hye', 'ind', 'ita', 'jpn', 'kor', 'mkd', 'msa', 'nld', 'nor', 'pol', 'por', 'ron', 'rus',
         'slk', 'slv', 'spa', 'sqi', 'srp', 'swe', 'tha', 'tur', 'ukr', 'vie', 'zho'
     ]} | {Language.fromietf(l) for l in ["sr-Latn", "sr-Cyrl"]}
+    languages.update(set(Language.rebuild(l, hi=True) for l in languages))
 
     USE_ADDICTED_RANDOM_AGENTS = False
     hearing_impaired_verifiable = True
@@ -231,34 +230,29 @@ class Addic7edProvider(_Addic7edProvider):
         logger.info('Getting show ids')
         region.set(self.last_show_ids_fetch_key, datetime.datetime.now())
 
-        r = self.session.get(self.server_url + 'shows.php', timeout=10)
+        r = self.session.get(self.server_url, timeout=10)
         r.raise_for_status()
 
-        # LXML parser seems to fail when parsing Addic7ed.com HTML markup.
-        # Last known version to work properly is 3.6.4 (next version, 3.7.0, fails)
-        # Assuming the site's markup is bad, and stripping it down to only contain what's needed.
-        show_cells = re.findall(show_cells_re, r.content)
-        if show_cells:
-            soup = ParserBeautifulSoup(b''.join(show_cells).decode('utf-8', 'ignore'), ['lxml', 'html.parser'])
-        else:
-            # If RegEx fails, fall back to original r.text and use 'html.parser'
-            soup = ParserBeautifulSoup(r.text, ['html.parser'])
+        soup = ParserBeautifulSoup(r.content.decode('utf-8', 'ignore'), ['lxml', 'html.parser'])
 
         # populate the show ids
         show_ids = {}
-        shows = soup.select('td > h3 > a[href^="/show/"]')
+        shows = soup.find(id='qsShow')
         for show in shows:
-            show_clean = sanitize(show.text, default_characters=self.sanitize_characters)
-            try:
-                show_id = int(show['href'][6:])
-            except ValueError:
-                continue
+            if hasattr(show, 'attrs'):
+                try:
+                    show_id = int(show.attrs['value'])
+                except ValueError:
+                    continue
 
-            show_ids[show_clean] = show_id
-            match = series_year_re.match(show_clean)
-            if match and match.group(2) and match.group(1) not in show_ids:
-                # year found, also add it without year
-                show_ids[match.group(1)] = show_id
+                if show_id != 0:
+                    show_clean = sanitize(show.text, default_characters=self.sanitize_characters)
+
+                    show_ids[show_clean] = show_id
+                    match = series_year_re.match(show_clean)
+                    if match and match.group(2) and match.group(1) not in show_ids:
+                        # year found, also add it without year
+                        show_ids[match.group(1)] = show_id
 
         soup.decompose()
         soup = None
@@ -380,6 +374,10 @@ class Addic7edProvider(_Addic7edProvider):
             title = cells[2].text
             version = cells[4].text
             download_link = cells[9].a['href'][1:]
+
+            # set subtitle language to hi if it's hearing_impaired
+            if hearing_impaired:
+                language = Language.rebuild(language, hi=True)
 
             subtitle = self.subtitle_class(language, hearing_impaired, page_link, series, season, episode, title,
                                            year,

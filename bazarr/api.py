@@ -37,7 +37,7 @@ from scheduler import scheduler
 from subsyncer import subsync
 from filesystem import browse_bazarr_filesystem, browse_sonarr_filesystem, browse_radarr_filesystem
 
-from subliminal_patch.core import SUBTITLE_EXTENSIONS
+from subliminal_patch.core import SUBTITLE_EXTENSIONS, guessit
 
 from flask import Flask, jsonify, request, Response, Blueprint, url_for, make_response
 
@@ -506,7 +506,13 @@ class Episodes(Resource):
                     subs[0] = {"name": language_from_alpha2(subtitle[0]),
                                "code2": subtitle[0],
                                "code3": alpha3_from_alpha2(subtitle[0]),
-                               "forced": True if len(subtitle) > 1 else False}
+                               "forced": False,
+                               "hi": False}
+                    if len(subtitle) > 1:
+                        subs[0].update({
+                            "forced": True if subtitle[1] == 'forced' else False,
+                            "hi": True if subtitle[1] == 'hi' else False
+                        })
 
                 if settings.general.getboolean('embedded_subs_show_desired'):
                     item['subtitles'] = [x for x in item['subtitles'] if
@@ -522,7 +528,13 @@ class Episodes(Resource):
                     item['missing_subtitles'][i] = {"name": language_from_alpha2(subtitle[0]),
                                                     "code2": subtitle[0],
                                                     "code3": alpha3_from_alpha2(subtitle[0]),
-                                                    "forced": True if len(subtitle) > 1 else False}
+                                                    "forced": False,
+                                                    "hi": False}
+                    if len(subtitle) > 1:
+                        item['missing_subtitles'][i].update({
+                            "forced": True if subtitle[1] == 'forced' else False,
+                            "hi": True if subtitle[1] == 'hi' else False
+                        })
             else:
                 item.update({"missing_subtitles": []})
 
@@ -537,6 +549,19 @@ class Episodes(Resource):
             item.update({"desired_languages": desired_languages})
         return jsonify(draw=draw, recordsTotal=row_count, recordsFiltered=row_count, data=result)
 
+class SubtitleNameInfo(Resource):
+    @authenticate
+    def get(self):
+        name = request.args.get('filename')
+        if name is not None:
+            opts = dict()
+            opts['type'] = 'episode'
+            result = guessit(name, options=opts)
+            if 'subtitle_language' in result:
+                result['subtitle_language'] = str(result['subtitle_language'])
+            return jsonify(data=result)
+        else:
+            return '', 400
 
 class EpisodesSubtitlesDelete(Resource):
     @authenticate
@@ -544,6 +569,7 @@ class EpisodesSubtitlesDelete(Resource):
         episodePath = request.form.get('episodePath')
         language = request.form.get('language')
         forced = request.form.get('forced')
+        hi = request.form.get('hi')
         subtitlesPath = request.form.get('subtitlesPath')
         sonarrSeriesId = request.form.get('sonarrSeriesId')
         sonarrEpisodeId = request.form.get('sonarrEpisodeId')
@@ -551,6 +577,7 @@ class EpisodesSubtitlesDelete(Resource):
         result = delete_subtitles(media_type='series',
                                   language=language,
                                   forced=forced,
+                                  hi=hi,
                                   media_path=episodePath,
                                   subtitles_path=subtitlesPath,
                                   sonarr_series_id=sonarrSeriesId,
@@ -586,7 +613,12 @@ class EpisodesSubtitlesDownload(Resource):
                 message = result[0]
                 path = result[1]
                 forced = result[5]
-                language_code = result[2] + ":forced" if forced else result[2]
+                if result[8]:
+                    language_code = result[2] + ":hi"
+                elif forced:
+                    language_code = result[2] + ":forced"
+                else:
+                    language_code = result[2]
                 provider = result[3]
                 score = result[4]
                 subs_id = result[6]
@@ -655,7 +687,12 @@ class EpisodesSubtitlesManualDownload(Resource):
                 message = result[0]
                 path = result[1]
                 forced = result[5]
-                language_code = result[2] + ":forced" if forced else result[2]
+                if result[8]:
+                    language_code = result[2] + ":hi"
+                elif forced:
+                    language_code = result[2] + ":forced"
+                else:
+                    language_code = result[2]
                 provider = result[3]
                 score = result[4]
                 subs_id = result[6]
@@ -705,7 +742,10 @@ class EpisodesSubtitlesUpload(Resource):
                 message = result[0]
                 path = result[1]
                 subs_path = result[2]
-                language_code = language + ":forced" if forced else language
+                if forced:
+                    language_code = language + ":forced"
+                else:
+                    language_code = language
                 provider = "manual"
                 score = 360
                 history_log(4, sonarrSeriesId, sonarrEpisodeId, message, path, language_code, provider, score, subtitles_path=subs_path)
@@ -755,7 +795,8 @@ class EpisodesHistory(Resource):
                 item['language'] = {"name": language_from_alpha2(language[0]),
                                     "code2": language[0],
                                     "code3": alpha3_from_alpha2(language[0]),
-                                    "forced": True if len(language) > 1 else False}
+                                    "forced": True if item['language'].endswith(':forced') else False,
+                                    "hi": True if item['language'].endswith(':hi') else False}
             if item['score']:
                 item['score'] = str(round((int(item['score']) * 100 / 360), 2)) + "%"
 
@@ -874,7 +915,13 @@ class Movies(Resource):
                                             "name": language_from_alpha2(language[0]),
                                             "code2": language[0],
                                             "code3": alpha3_from_alpha2(language[0]),
-                                            "forced": True if len(language) > 1 else False}
+                                            "forced": False,
+                                            "hi": False}
+                    if len(language) > 1:
+                        item['subtitles'][i].update({
+                            "forced": True if language[1] == 'forced' else False,
+                            "hi": True if language[1] == 'hi' else False
+                        })
 
                 if settings.general.getboolean('embedded_subs_show_desired'):
                     desired_lang_list = []
@@ -894,7 +941,13 @@ class Movies(Resource):
                     item['missing_subtitles'][i] = {"name": language_from_alpha2(language[0]),
                                                     "code2": language[0],
                                                     "code3": alpha3_from_alpha2(language[0]),
-                                                    "forced": True if len(language) > 1 else False}
+                                                    "forced": False,
+                                                    "hi": False}
+                    if len(language) > 1:
+                        item['missing_subtitles'][i].update({
+                            "forced": True if language[1] == 'forced' else False,
+                            "hi": True if language[1] == 'hi' else False
+                        })
             else:
                 item.update({"missing_subtitles": []})
 
@@ -1034,12 +1087,14 @@ class MovieSubtitlesDelete(Resource):
         moviePath = request.form.get('moviePath')
         language = request.form.get('language')
         forced = request.form.get('forced')
+        hi = request.form.get('hi')
         subtitlesPath = request.form.get('subtitlesPath')
         radarrId = request.form.get('radarrId')
 
         result = delete_subtitles(media_type='movie',
                                   language=language,
                                   forced=forced,
+                                  hi=hi,
                                   media_path=moviePath,
                                   subtitles_path=subtitlesPath,
                                   radarr_id=radarrId)
@@ -1073,7 +1128,12 @@ class MovieSubtitlesDownload(Resource):
                 message = result[0]
                 path = result[1]
                 forced = result[5]
-                language_code = result[2] + ":forced" if forced else result[2]
+                if result[8]:
+                    language_code = result[2] + ":hi"
+                elif forced:
+                    language_code = result[2] + ":forced"
+                else:
+                    language_code = result[2]
                 provider = result[3]
                 score = result[4]
                 subs_id = result[6]
@@ -1141,7 +1201,12 @@ class MovieSubtitlesManualDownload(Resource):
                 message = result[0]
                 path = result[1]
                 forced = result[5]
-                language_code = result[2] + ":forced" if forced else result[2]
+                if result[8]:
+                    language_code = result[2] + ":hi"
+                elif forced:
+                    language_code = result[2] + ":forced"
+                else:
+                    language_code = result[2]
                 provider = result[3]
                 score = result[4]
                 subs_id = result[6]
@@ -1190,7 +1255,10 @@ class MovieSubtitlesUpload(Resource):
                 message = result[0]
                 path = result[1]
                 subs_path = result[2]
-                language_code = language + ":forced" if forced else language
+                if forced:
+                    language_code = language + ":forced"
+                else:
+                    language_code = language
                 provider = "manual"
                 score = 120
                 history_log_movie(4, radarrId, message, path, language_code, provider, score, subtitles_path=subs_path)
@@ -1240,7 +1308,8 @@ class MovieHistory(Resource):
                 item['language'] = {"name": language_from_alpha2(language[0]),
                                     "code2": language[0],
                                     "code3": alpha3_from_alpha2(language[0]),
-                                    "forced": True if len(language) > 1 else False}
+                                    "forced": True if item['language'].endswith(':forced') else False,
+                                    "hi": True if item['language'].endswith(':hi') else False}
             if item['score']:
                 item['score'] = str(round((int(item['score']) * 100 / 120), 2)) + "%"
 
@@ -1371,7 +1440,8 @@ class HistorySeries(Resource):
                 item['language'] = {"name": language_from_alpha2(splitted_language[0]),
                                     "code2": splitted_language[0],
                                     "code3": alpha3_from_alpha2(splitted_language[0]),
-                                    "forced": True if len(splitted_language) > 1 else False}
+                                    "forced": True if item['language'].endswith(':forced') else False,
+                                    "hi": True if item['language'].endswith(':hi') else False}
 
             # Make timestamp pretty
             if item['timestamp']:
@@ -1594,7 +1664,13 @@ class WantedSeries(Resource):
                     item['missing_subtitles'][i] = {"name": language_from_alpha2(splitted_subs[0]),
                                                     "code2": splitted_subs[0],
                                                     "code3": alpha3_from_alpha2(splitted_subs[0]),
-                                                    "forced": True if len(splitted_subs) > 1 else False}
+                                                    "forced": False,
+                                                    "hi": False}
+                    if len(splitted_subs) > 1:
+                        item['missing_subtitles'][i].update({
+                            "forced": True if splitted_subs[1] == 'forced' else False,
+                            "hi": True if splitted_subs[1] == 'hi' else False
+                        })
             else:
                 item.update({"missing_subtitles": []})
 
@@ -1632,7 +1708,13 @@ class WantedMovies(Resource):
                     item['missing_subtitles'][i] = {"name": language_from_alpha2(splitted_subs[0]),
                                                     "code2": splitted_subs[0],
                                                     "code3": alpha3_from_alpha2(splitted_subs[0]),
-                                                    "forced": True if len(splitted_subs) > 1 else False}
+                                                    "forced": False,
+                                                    "hi": False}
+                    if len(splitted_subs) > 1:
+                        item['missing_subtitles'][i].update({
+                            "forced": True if splitted_subs[1] == 'forced' else False,
+                            "hi": True if splitted_subs[1] == 'hi' else False
+                        })
             else:
                 item.update({"missing_subtitles": []})
 
@@ -1688,7 +1770,8 @@ class BlacklistSeries(Resource):
                 item['language'] = {"name": language_from_alpha2(language[0]),
                                     "code2": language[0],
                                     "code3": alpha3_from_alpha2(language[0]),
-                                    "forced": True if len(language) > 1 else False}
+                                    "forced": True if item['language'].endswith(':forced') else False,
+                                    "hi": True if item['language'].endswith(':hi') else False}
 
         return jsonify(draw=draw, recordsTotal=row_count, recordsFiltered=row_count, data=data)
 
@@ -1702,7 +1785,13 @@ class BlacklistEpisodeSubtitlesAdd(Resource):
         subs_id = request.form.get('subs_id')
         language = request.form.get('language')
         forced = request.form.get('forced')
-        language_str = language + ':forced' if forced == 'true' else language
+        hi = request.form.get('hi')
+        if hi == 'true':
+            language_str = language + ':hi'
+        elif forced == 'true':
+            language_str = language + ':forced'
+        else:
+            language_str = language
         media_path = request.form.get('video_path')
         subtitles_path = request.form.get('subtitles_path')
 
@@ -1714,6 +1803,7 @@ class BlacklistEpisodeSubtitlesAdd(Resource):
         delete_subtitles(media_type='series',
                          language=alpha3_from_alpha2(language),
                          forced=forced,
+                         hi=hi,
                          media_path=path_mappings.path_replace(media_path),
                          subtitles_path=path_mappings.path_replace(subtitles_path),
                          sonarr_series_id=sonarr_series_id,
@@ -1766,7 +1856,8 @@ class BlacklistMovies(Resource):
                 item['language'] = {"name": language_from_alpha2(language[0]),
                                     "code2": language[0],
                                     "code3": alpha3_from_alpha2(language[0]),
-                                    "forced": True if len(language) > 1 else False}
+                                    "forced": True if item['language'].endswith(':forced') else False,
+                                    "hi": True if item['language'].endswith(':hi') else False}
 
         return jsonify(draw=draw, recordsTotal=row_count, recordsFiltered=row_count, data=data)
 
@@ -1779,7 +1870,13 @@ class BlacklistMovieSubtitlesAdd(Resource):
         subs_id = request.form.get('subs_id')
         language = request.form.get('language')
         forced = request.form.get('forced')
-        language_str = language + ':forced' if forced == 'true' else language
+        hi = request.form.get('hi')
+        if hi == 'true':
+            language_str = language + ':hi'
+        elif forced == 'true':
+            language_str = language + ':forced'
+        else:
+            language_str = language
         media_path = request.form.get('video_path')
         subtitles_path = request.form.get('subtitles_path')
 
@@ -1790,6 +1887,7 @@ class BlacklistMovieSubtitlesAdd(Resource):
         delete_subtitles(media_type='movie',
                          language=alpha3_from_alpha2(language),
                          forced=forced,
+                         hi=hi,
                          media_path=path_mappings.path_replace_movie(media_path),
                          subtitles_path=path_mappings.path_replace_movie(subtitles_path),
                          radarr_id=radarr_id)
@@ -1904,6 +2002,8 @@ api.add_resource(SystemLogs, '/systemlogs')
 api.add_resource(SystemProviders, '/systemproviders')
 api.add_resource(SystemStatus, '/systemstatus')
 api.add_resource(SystemReleases, '/systemreleases')
+
+api.add_resource(SubtitleNameInfo, '/subtitle_name_info')
 
 api.add_resource(Series, '/series')
 api.add_resource(SeriesEditor, '/series_editor')

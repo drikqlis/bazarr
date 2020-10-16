@@ -4,7 +4,7 @@ import os
 import re
 import logging
 
-import chardet
+from charamel import Detector
 from bs4 import UnicodeDammit
 
 from config import settings
@@ -101,24 +101,24 @@ def pp_replace(pp_command, episode, subtitles, language, language_code2, languag
     pp_command = pp_command.replace('{{directory}}', os.path.dirname(episode))
     pp_command = pp_command.replace('{{episode}}', episode)
     pp_command = pp_command.replace('{{episode_name}}', os.path.splitext(os.path.basename(episode))[0])
-    pp_command = pp_command.replace('{{subtitles}}', subtitles)
-    pp_command = pp_command.replace('{{subtitles_language}}', language + is_forced_string)
-    pp_command = pp_command.replace('{{subtitles_language_code2}}', language_code2 + is_forced)
-    pp_command = pp_command.replace('{{subtitles_language_code3}}', language_code3 + is_forced)
-    pp_command = pp_command.replace('{{episode_language}}', episode_language)
-    pp_command = pp_command.replace('{{episode_language_code2}}', episode_language_code2)
-    pp_command = pp_command.replace('{{episode_language_code3}}', episode_language_code3)
+    pp_command = pp_command.replace('{{subtitles}}', str(subtitles))
+    pp_command = pp_command.replace('{{subtitles_language}}', str(language) + is_forced_string)
+    pp_command = pp_command.replace('{{subtitles_language_code2}}', str(language_code2) + is_forced)
+    pp_command = pp_command.replace('{{subtitles_language_code3}}', str(language_code3) + is_forced)
+    pp_command = pp_command.replace('{{episode_language}}', str(episode_language))
+    pp_command = pp_command.replace('{{episode_language_code2}}', str(episode_language_code2))
+    pp_command = pp_command.replace('{{episode_language_code3}}', str(episode_language_code3))
     pp_command = pp_command.replace('{{score}}', str(score))
     pp_command = pp_command.replace('{{subtitle_id}}', str(subtitle_id))
     pp_command = pp_command.replace('{{provider}}', str(provider))
     pp_command = pp_command.replace('{{series_id}}', str(series_id))
     pp_command = pp_command.replace('{{episode_id}}', str(episode_id))
-
     return pp_command
 
 
 def get_subtitle_destination_folder():
-    fld_custom = str(settings.general.subfolder_custom).strip() if settings.general.subfolder_custom else None
+    fld_custom = str(settings.general.subfolder_custom).strip() if (settings.general.subfolder_custom and
+                                                                    settings.general.subfolder != 'current') else None
     return fld_custom
 
 
@@ -164,9 +164,10 @@ def force_unicode(s):
         try:
             s = s.decode("utf-8")
         except UnicodeDecodeError:
-            t = chardet.detect(s)
+            detector = Detector()
+            t = detector.detect(s)
             try:
-                s = s.decode(t["encoding"])
+                s = s.decode(t)
             except UnicodeDecodeError:
                 s = UnicodeDammit(s).unicode_markup
     return s

@@ -119,6 +119,7 @@ class SubsceneProvider(Provider, ProviderSubtitleArchiveMixin):
     subtitle_class = SubsceneSubtitle
     languages = supported_languages
     languages.update(set(Language.rebuild(l, forced=True) for l in languages))
+    languages.update(set(Language.rebuild(l, hi=True) for l in languages))
 
     session = None
     skip_wrong_fps = False
@@ -278,6 +279,10 @@ class SubsceneProvider(Provider, ProviderSubtitleArchiveMixin):
             if self.only_foreign:
                 subtitle.language = Language.rebuild(subtitle.language, forced=True)
 
+            # set subtitle language to hi if it's hearing_impaired
+            if subtitle.hearing_impaired:
+                subtitle.language = Language.rebuild(subtitle.language, hi=True)
+
             subtitles.append(subtitle)
             logger.debug('Found subtitle %r', subtitle)
 
@@ -305,7 +310,7 @@ class SubsceneProvider(Provider, ProviderSubtitleArchiveMixin):
 
         # re-search for episodes without explicit release name
         if isinstance(video, Episode):
-            titles = list(set([video.series] + video.alternative_series))[:2]
+            titles = list(set([video.series] + video.alternative_series[:1]))
             # term = u"%s S%02iE%02i" % (video.series, video.season, video.episode)
             more_than_one = len(titles) > 1
             for series in titles:
@@ -334,7 +339,7 @@ class SubsceneProvider(Provider, ProviderSubtitleArchiveMixin):
                 if more_than_one:
                     time.sleep(self.search_throttle)
         else:
-            titles = list(set([video.title] + video.alternative_titles))[:2]
+            titles = list(set([video.title] + video.alternative_titles[:1]))
             more_than_one = len(titles) > 1
             for title in titles:
                 logger.debug('Searching for movie results: %r', title)
